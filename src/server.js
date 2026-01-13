@@ -1,4 +1,5 @@
 const path = require('path');
+const cors = require('cors');
 const express = require('express');
 const connectDB = require('./c-app/c-config/db.config');
 const routes = require('./c-app/c-routes/routes');
@@ -8,6 +9,16 @@ function createApp() {
 
   // ===== CONNECT DB =====
   connectDB();
+
+  // Cors
+  app.use(
+    cors({
+      origin: ['http://localhost:5173', 'https://smartparking.com'],
+    })
+  );
+
+  app.use(express.json());
+  app.use(express.urlencoded({ extended: true }));
 
   // ===== MIDDLEWARE =====
   app.use(express.json());
