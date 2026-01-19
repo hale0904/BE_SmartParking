@@ -1,8 +1,8 @@
 const path = require('path');
 const cors = require('cors');
 const express = require('express');
-const connectDB = require('./c-app/c-config/db.config');
-const routes = require('./c-app/c-routes/routes');
+const connectDB = require('./app/config/db.config');
+const routes = require('./app/routes/routes');
 
 function createApp() {
   const app = express();

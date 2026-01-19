@@ -1,10 +1,10 @@
 const Admin = require('./admin-auth.model');
-const { hashPassword, comparePassword } = require('../../../c-utils/hash.util');
+const { hashPassword, comparePassword } = require('../../../utils/hash.util');
 
 const {
   generateAccessToken,
   generateRefreshToken,
-} = require('../../../c-utils/token.util');
+} = require('../../../utils/token.util');
 
 exports.registerAdmin = async ({ email, password }) => {
   const existingAdmin = await Admin.findOne({ email });

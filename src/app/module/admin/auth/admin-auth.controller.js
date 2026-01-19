@@ -52,8 +52,8 @@ exports.loginAdmin = async (req, res) => {
         email: admin.email,
         role: admin.role,
       },
-      accessToken,
-      refreshToken,
+      // accessToken,
+      // refreshToken,
     });
   } catch (err) {
     return res.status(401).json({
