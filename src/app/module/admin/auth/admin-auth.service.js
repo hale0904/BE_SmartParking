@@ -6,7 +6,7 @@ const {
   generateRefreshToken,
 } = require('../../../utils/token.util');
 
-exports.registerAdmin = async ({ email, password }) => {
+exports.registerAdmin = async ({ code, userName, email, password }) => {
   const existingAdmin = await Admin.findOne({ email });
   if (existingAdmin) {
     throw new Error('Admin already exists');
@@ -15,8 +15,11 @@ exports.registerAdmin = async ({ email, password }) => {
   const hashedPassword = await hashPassword(password);
 
   const admin = await Admin.create({
+    code,
+    userName,
     email,
     password: hashedPassword,
+    createdAt: new Date(),
   });
 
   return admin;

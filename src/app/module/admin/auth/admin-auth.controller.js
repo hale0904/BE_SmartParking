@@ -3,12 +3,12 @@ const authService = require('./admin-auth.service');
 // Handler register
 exports.registerAdmin = async (req, res) => {
   try {
-    const { email, password, confirmPassword } = req.body;
+    const { code, userName, email, password, confirmPassword } = req.body;
 
-    if (!email || !password || !confirmPassword) {
+    if (!code || !userName || !email || !password || !confirmPassword) {
       return res.status(400).json({
         success: false,
-        message: 'All fields are required',
+        message: 'Bắt buộc phải điền đầy đủ thông tin',
       });
     }
 
@@ -19,8 +19,12 @@ exports.registerAdmin = async (req, res) => {
       });
     }
 
-    const admin = await authService.registerAdmin({ email, password });
-
+    const admin = await authService.registerAdmin({
+      code,
+      userName,
+      email,
+      password,
+    });
     return res.status(201).json({
       success: true,
       message: 'Admin registered successfully',
