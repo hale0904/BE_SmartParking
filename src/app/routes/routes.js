@@ -1,7 +1,7 @@
 const express = require('express');
 const authAdminRoutes = require('../module/admin/auth/admin-auth.route');
 const authUserRoutes = require('../module/users/auth/user-auth.route');
-const parkingAdminRoutes = require('../module/admin/parking/admin-parking.route');
+const parkingAdminRoutes = require('../module/admin/parking/parking/admin-parking.route');
 
 const router = express.Router();
 
