@@ -1,4 +1,4 @@
-const Admin = require('./admin-auth.model');
+const Admin = require('../../../models/admin.model');
 const { hashPassword, comparePassword } = require('../../../utils/hash.util');
 
 const {

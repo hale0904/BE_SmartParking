@@ -13,7 +13,7 @@ const FloorSchema = new mongoose.Schema(
     },
     parkingCode: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'DTOParking',
+      ref: 'Parking',
       required: true,
     },
     level: {
@@ -65,4 +65,4 @@ const FloorSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-module.exports = mongoose.model('DTOFloor', FloorSchema);
+module.exports = mongoose.model('Floor', FloorSchema);

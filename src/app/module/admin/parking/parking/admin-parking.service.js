@@ -1,4 +1,4 @@
-const Parking = require('./admin-parking.model');
+const Parking = require('../../../../models/parking.model');
 
 const STATUS_MAP = {
   0: 'Đang chỉnh sửa',

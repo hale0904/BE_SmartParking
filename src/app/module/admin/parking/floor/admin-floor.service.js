@@ -1,5 +1,5 @@
-const floor = require('./admin-floor.model');
-const Parking = require('../parking/admin-parking.model');
+const floor = require('../../../../models/floor.model');
+const Parking = require('../../../../models/parking.model');
 const STATUS_MAP = {
   0: 'Đang chỉnh sửa',
   1: 'Hoạt động',

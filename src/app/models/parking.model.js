@@ -37,9 +37,9 @@ const ParkingSchema = new mongoose.Schema({
   },
   adminId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Admins',
+    ref: 'Admin',
     required: false,
   },
 });
 
-module.exports = mongoose.model('DTOParking', ParkingSchema);
+module.exports = mongoose.model('Parking', ParkingSchema);
