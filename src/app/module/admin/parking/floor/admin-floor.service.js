@@ -25,7 +25,7 @@ exports.getListFloorMap = async (status, keyword) => {
   const floors = await floor
     .find(filter)
     .select(
-      'code name level status statusName totalSlots parkingCode entrances exits availableSlots occupiedSlots reservedSlots'
+      'code nameFloor level status statusName totalZone parkingCode entrances exits createdAt'
     )
     .populate('parkingCode', 'code name location status statusName createAt');
 
@@ -41,7 +41,7 @@ exports.getFloorDetailMap = async (code) => {
   const floorDetail = await floor
     .findOne({ code })
     .select(
-      'code name level status statusName totalSlots parkingCode entrances exits availableSlots occupiedSlots reservedSlots'
+      'code nameFloor level status statusName totalZone parkingCode entrances exits createdAt'
     )
     .populate('parkingCode', 'code name location status statusName createAt');
 
@@ -55,16 +55,14 @@ exports.getFloorDetailMap = async (code) => {
 exports.updateFloorMap = async (payload) => {
   const {
     code, // code của floor (nếu có => update, nếu rỗng => create)
-    name,
+    nameFloor,
     parkingCode, // FE gửi: "PK001"
     level,
-    totalSlots,
+    totalZone,
     entrances,
     exits,
-    availableSlots,
-    occupiedSlots,
-    reservedSlots,
     status,
+    createdAt,
   } = payload;
 
   // ======================
@@ -83,7 +81,7 @@ exports.updateFloorMap = async (payload) => {
   // CREATE
   // ======================
   if (!code || Number(code) === 0) {
-    if (!name) {
+    if (!nameFloor) {
       throw new Error('Tên tầng là bắt buộc');
     }
 
@@ -100,17 +98,15 @@ exports.updateFloorMap = async (payload) => {
 
     const newFloor = await floor.create({
       code: newCode,
-      name,
+      nameFloor,
       parkingCode: parking._id, // lấy từ cha
       level: newLevel,
-      totalSlots: totalSlots ?? 0,
+      totalZone: totalZone ?? 0,
       entrances: entrances ?? 0,
       exits: exits ?? 0,
-      availableSlots: availableSlots ?? 0,
-      occupiedSlots: occupiedSlots ?? 0,
-      reservedSlots: reservedSlots ?? 0,
       status: finalStatus,
       statusName: STATUS_MAP[finalStatus],
+      createdAt: createdAt ?? new Date(),
     });
 
     return {
@@ -126,29 +122,24 @@ exports.updateFloorMap = async (payload) => {
   if (!existingFloor) throw new Error('Tầng không tồn tại');
 
   if (
-    name === undefined &&
+    nameFloor === undefined &&
     level === undefined &&
-    totalSlots === undefined &&
+    totalZone === undefined &&
     entrances === undefined &&
     exits === undefined &&
-    availableSlots === undefined &&
-    occupiedSlots === undefined &&
-    reservedSlots === undefined &&
     status === undefined &&
-    parkingCode === undefined
+    parkingCode === undefined &&
+    createdAt === undefined
   ) {
     throw new Error('Không có dữ liệu để cập nhật');
   }
 
-  if (name !== undefined) existingFloor.name = name;
+  if (nameFloor !== undefined) existingFloor.nameFloor = nameFloor;
   if (level !== undefined) existingFloor.level = level;
-  if (totalSlots !== undefined) existingFloor.totalSlots = totalSlots;
+  if (totalZone !== undefined) existingFloor.totalZone = totalZone;
   if (entrances !== undefined) existingFloor.entrances = entrances;
   if (exits !== undefined) existingFloor.exits = exits;
-  if (availableSlots !== undefined)
-    existingFloor.availableSlots = availableSlots;
-  if (occupiedSlots !== undefined) existingFloor.occupiedSlots = occupiedSlots;
-  if (reservedSlots !== undefined) existingFloor.reservedSlots = reservedSlots;
+  if (createdAt !== undefined) existingFloor.createdAt = createdAt;
 
   // nếu đổi parkingCode => map lại sang ObjectId
   if (parkingCode !== undefined) {

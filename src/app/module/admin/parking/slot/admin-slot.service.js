@@ -1,5 +1,5 @@
 const Slot = require('../../../../models/slot.model');
-const Floor = require('../../../../models/floor.model');
+const Zone = require('../../../../models/zone.model');
 
 const STATUS_MAP = {
   0: 'Đang chỉnh sửa',
@@ -9,25 +9,26 @@ const STATUS_MAP = {
 
 exports.updateSlotMap = async (payload) => {
   const {
-    code, // code của floor (nếu có => update, nếu rỗng => create)
+    code, // code của Zone (nếu có => update, nếu rỗng => create)
     nameSlot,
-    floorCode, // FE gửi: "PK001-F1"
+    zoneCode, // FE gửi: "PK001-F1"
     status,
-    zone,
     positionX,
     positionY,
+    createdAt,
   } = payload;
 
   // ======================
   // VALIDATE CHA
   // ======================
-  if (!floorCode) {
-    throw new Error('Mã tầng (floorCode) là bắt buộc');
+  if (!zoneCode) {
+    throw new Error('Mã khu (zoneCode) là bắt buộc');
   }
-
-  const floor = await Floor.findOne({ code: floorCode });
-  if (!floor) {
-    throw new Error('Tầng không tồn tại');
+  console.log(zoneCode);
+  const zone = await Zone.findOne({ code: zoneCode });
+  console.log(zone);
+  if (!zone) {
+    throw new Error('Khu không tồn tại');
   }
 
   // ======================
@@ -38,23 +39,23 @@ exports.updateSlotMap = async (payload) => {
       throw new Error('Tên vị trí là bắt buộc');
     }
 
-    // Sinh code tầng theo cha: PK001-F1
+    // Sinh code khu theo cha: PK001-F1
     const countSlot = await Slot.countDocuments({
-      floorCode: floor._id,
+      zoneCode: zone._id,
     });
 
-    const newCode = `${floor.code}-S${countSlot + 1}`;
+    const newCode = `${zone.code}S${countSlot + 1}`;
     const finalStatus =
       status !== undefined && status !== null ? Number(status) : 0;
 
     const newSlot = await Slot.create({
       code: newCode,
       nameSlot: nameSlot,
-      floorCode: floor._id, // lấy từ cha
+      zoneCode: zone._id, // lấy từ cha
       positionX: positionX ?? 0,
       positionY: positionY ?? 0,
       status: finalStatus,
-      zone: zone ?? '',
+      createdAt: createdAt ? new Date(createdAt) : Date.now(),
       statusName: STATUS_MAP[finalStatus],
     });
 
@@ -74,21 +75,21 @@ exports.updateSlotMap = async (payload) => {
     nameSlot === undefined &&
     positionX === undefined &&
     positionY === undefined &&
-    zone === undefined &&
     status === undefined &&
-    floorCode === undefined
+    zoneCode === undefined
   ) {
     throw new Error('Không có dữ liệu để cập nhật');
   }
 
-  if (nameSlot !== undefined) existingSlot.name = nameSlot;
+  if (nameSlot !== undefined) existingSlot.nameSlot = nameSlot;
   if (positionX !== undefined) existingSlot.positionX = positionX;
   if (positionY !== undefined) existingSlot.positionY = positionY;
-  if (zone !== undefined) existingSlot.zone = zone;
 
-  // nếu đổi floorCode => map lại sang ObjectId
-  if (floorCode !== undefined) {
-    existingSlot.floorCode = floor._id; // lấy từ cha
+  // nếu đổi zoneCode => map lại sang ObjectId
+  if (zoneCode !== undefined) {
+    const newZone = await Zone.findOne({ code: zoneCode.split('-')[0] });
+    if (!newZone) throw new Error('Khu mới không tồn tại');
+    existingSlot.zoneCode = newZone._id; // lấy từ cha
   }
 
   if (status !== undefined && status !== null) {

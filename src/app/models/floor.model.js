@@ -7,7 +7,7 @@ const FloorSchema = new mongoose.Schema(
       required: true,
       unique: true,
     },
-    name: {
+    nameFloor: {
       type: String,
       required: true,
     },
@@ -21,7 +21,7 @@ const FloorSchema = new mongoose.Schema(
       required: true,
       default: 0,
     },
-    totalSlots: {
+    totalZone: {
       type: Number,
       required: true,
       default: 0,
@@ -36,21 +36,6 @@ const FloorSchema = new mongoose.Schema(
       required: true,
       default: 0,
     },
-    availableSlots: {
-      type: Number,
-      required: true,
-      default: 0,
-    },
-    occupiedSlots: {
-      type: Number,
-      required: true,
-      default: 0,
-    },
-    reservedSlots: {
-      type: Number,
-      required: true,
-      default: 0,
-    },
     status: {
       type: Number,
       required: true,
@@ -60,6 +45,10 @@ const FloorSchema = new mongoose.Schema(
       type: String,
       required: true,
       default: 'Đang chỉnh sửa',
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now,
     },
   },
   { timestamps: true }

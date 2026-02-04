@@ -14,10 +14,10 @@ const SlotParkingSchema = new mongoose.Schema(
       required: true,
       default: '',
     },
-    floorCode: {
+    zoneCode: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Floor',
-      required: false,
+      ref: 'Zone',
+      required: true,
     },
     status: {
       type: Number,
@@ -29,11 +29,6 @@ const SlotParkingSchema = new mongoose.Schema(
       required: true,
       default: 'Đang chỉnh sửa',
     },
-    zone: {
-      type: String,
-      required: true,
-      default: '',
-    },
     positionX: {
       type: Number,
       required: true,
@@ -43,6 +38,10 @@ const SlotParkingSchema = new mongoose.Schema(
       type: Number,
       required: true,
       default: 0,
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now,
     },
   },
   { timestamps: true }
