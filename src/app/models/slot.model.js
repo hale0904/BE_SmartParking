@@ -43,6 +43,20 @@ const SlotParkingSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    sensorId: {
+      type: String,
+      default: null,
+    },
+    isSensorReal: {
+      type: Boolean,
+      required: true,
+      default: true,
+    },
+    isActive: {
+      type: Boolean,
+      required: true,
+      default: true,
+    },
   },
   { timestamps: true }
 );

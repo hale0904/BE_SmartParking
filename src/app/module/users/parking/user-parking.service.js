@@ -77,6 +77,9 @@ exports.getParkingMap = async (parkingCode) => {
               y: s.positionY,
               status: s.status,
               statusName: s.statusName,
+              isSensorReal: s.isSensorReal,
+              sensorId: s.sensorId,
+              isActive: s.isActive,
             })),
           };
         }),
