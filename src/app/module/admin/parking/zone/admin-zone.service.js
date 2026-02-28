@@ -1,5 +1,6 @@
 const Zone = require('../../../../models/zone.model');
 const Floor = require('../../../../models/floor.model');
+const slotGroup = require('../../../../models/groupSLot.model');
 
 const STATUS_MAP = {
   0: 'Đang chỉnh sửa',
@@ -7,101 +8,82 @@ const STATUS_MAP = {
   2: 'Ngưng hoạt động',
 };
 
-const MIN_GAP = 1; // khoảng cách tối thiểu giữa các zone (đường đi)
+// ======================
+// GET LIST
+// ======================
+exports.getListZoneMap = async (status, keyword) => {
+  const filter = {};
+
+  if (status !== undefined && status !== null && status !== '') {
+    filter.status = Number(status);
+  }
+
+  if (keyword && keyword.trim() !== '') {
+    const regex = new RegExp(keyword.trim(), 'i');
+    filter.$or = [{ nameZone: regex }];
+  }
+
+  const zones = await Zone.find(filter)
+    .select('code nameZone color status statusName floorCode points createdAt')
+    .populate('floorCode', 'code nameFloor level status statusName createdAt');
+
+  const result = await Promise.all(
+    zones.map(async (z) => {
+      const totalGroupSlot = await slotGroup.countDocuments({
+        zoneCode: z._id,
+      });
+
+      return {
+        ...z.toObject(),
+        totalGroupSlot,
+      };
+    })
+  );
+
+  return result;
+};
 
 // ======================
-// HÀM CHECK ZONE
+// GET DETAIL
 // ======================
-function isTooCloseOrOverlap(a, b, gap) {
-  const bLeft = b.startPositionX - gap;
-  const bRight = b.endPositionX + gap;
-  const bTop = b.startPositionY - gap;
-  const bBottom = b.endPositionY + gap;
+exports.getZoneDetailMap = async (code) => {
+  if (!code) throw new Error('Mã khu vực không hợp lệ');
 
-  const aLeft = a.startPositionX;
-  const aRight = a.endPositionX;
-  const aTop = a.startPositionY;
-  const aBottom = a.endPositionY;
+  const zoneDetail = await Zone.findOne({ code })
+    .select('code nameZone color status statusName floorCode points createdAt')
+    .populate('floorCode', 'code nameFloor level status statusName createdAt');
 
-  return aLeft < bRight && aRight > bLeft && aTop < bBottom && aBottom > bTop;
-}
+  if (!zoneDetail) throw new Error('Khu vực không tồn tại');
+
+  const totalGroupSlot = await slotGroup.countDocuments({
+    zoneCode: zoneDetail._id,
+  });
+
+  return {
+    ...zoneDetail.toObject(),
+    totalGroupSlot,
+  };
+};
 
 // ======================
-// MAIN FUNCTION
+// CREATE / UPDATE
 // ======================
 exports.updateZoneMap = async (payload) => {
-  const {
-    code,
-    nameZone,
-    floorCode,
-    status,
-    totalSlots,
-    createdAt,
-    availableSlots,
-    occupiedSlots,
-    reservedSlots,
-    startPositionX,
-    startPositionY,
-    endPositionX,
-    endPositionY,
-  } = payload;
+  const { code, nameZone, floorCode, status, createdAt, points, color } =
+    payload;
 
-  // ======================
-  // VALIDATE CHA
-  // ======================
-  if (!floorCode) throw new Error('Mã tầng (floorCode) là bắt buộc');
+  if (!floorCode) throw new Error('Mã tầng là bắt buộc');
 
   const floor = await Floor.findOne({ code: floorCode });
   if (!floor) throw new Error('Tầng không tồn tại');
 
-  // Validate tọa độ nếu có gửi
-  if (
-    startPositionX !== undefined &&
-    startPositionY !== undefined &&
-    endPositionX !== undefined &&
-    endPositionY !== undefined
-  ) {
-    if (startPositionX >= endPositionX || startPositionY >= endPositionY) {
-      throw new Error('Tọa độ zone không hợp lệ');
-    }
-  }
-
-  // ======================
-  // CREATE
-  // ======================
+  // ===== CREATE =====
   if (!code || Number(code) === 0) {
-    if (!nameZone) throw new Error('Tên zone là bắt buộc');
+    if (!nameZone) throw new Error('Tên khu vực là bắt buộc');
 
-    const zones = await Zone.find({ floorCode: floor._id });
+    const countZone = await Zone.countDocuments({ floorCode: floor._id });
+    const newCode = `${floor.code}Z${countZone + 1}`;
 
-    const newZoneRect = {
-      startPositionX,
-      startPositionY,
-      endPositionX,
-      endPositionY,
-    };
-
-    // Check không được dính zone khác
-    for (const z of zones) {
-      const oldRect = {
-        startPositionX: z.startPositionX,
-        startPositionY: z.startPositionY,
-        endPositionX: z.endPositionX,
-        endPositionY: z.endPositionY,
-      };
-
-      if (isTooCloseOrOverlap(newZoneRect, oldRect, MIN_GAP)) {
-        throw new Error(
-          `Zone mới quá gần hoặc chồng lên zone ${z.code}. Vui lòng chừa lối đi.`
-        );
-      }
-    }
-
-    const countZone = await Zone.countDocuments({
-      floorCode: floor._id,
-    });
-
-    const newCode = `${floor.code}-Z${countZone + 1}`;
     const finalStatus =
       status !== undefined && status !== null ? Number(status) : 0;
 
@@ -109,17 +91,11 @@ exports.updateZoneMap = async (payload) => {
       code: newCode,
       nameZone,
       floorCode: floor._id,
-      startPositionX: startPositionX ?? 0,
-      startPositionY: startPositionY ?? 0,
-      endPositionX: endPositionX ?? 0,
-      endPositionY: endPositionY ?? 0,
-      totalSlots: totalSlots ?? 0,
       status: finalStatus,
-      availableSlots: availableSlots ?? 0,
-      occupiedSlots: occupiedSlots ?? 0,
-      reservedSlots: reservedSlots ?? 0,
-      createdAt: createdAt ? new Date(createdAt) : Date.now(),
       statusName: STATUS_MAP[finalStatus],
+      createdAt: createdAt ?? new Date(),
+      points: points ?? [],
+      color: color ?? '',
     });
 
     return {
@@ -128,56 +104,14 @@ exports.updateZoneMap = async (payload) => {
     };
   }
 
-  // ======================
-  // UPDATE
-  // ======================
+  // ===== UPDATE =====
   const existingZone = await Zone.findOne({ code });
-  if (!existingZone) throw new Error('Zone không tồn tại');
-
-  const zones = await Zone.find({
-    floorCode: floor._id,
-    code: { $ne: code },
-  });
-
-  const updatedRect = {
-    startPositionX: startPositionX ?? existingZone.startPositionX,
-    startPositionY: startPositionY ?? existingZone.startPositionY,
-    endPositionX: endPositionX ?? existingZone.endPositionX,
-    endPositionY: endPositionY ?? existingZone.endPositionY,
-  };
-
-  for (const z of zones) {
-    const oldRect = {
-      startPositionX: z.startPositionX,
-      startPositionY: z.startPositionY,
-      endPositionX: z.endPositionX,
-      endPositionY: z.endPositionY,
-    };
-
-    if (isTooCloseOrOverlap(updatedRect, oldRect, MIN_GAP)) {
-      throw new Error(
-        `Zone cập nhật quá gần hoặc chồng lên zone ${z.code}. Vui lòng chừa lối đi.`
-      );
-    }
-  }
+  if (!existingZone) throw new Error('Khu vực không tồn tại');
 
   if (nameZone !== undefined) existingZone.nameZone = nameZone;
-  if (startPositionX !== undefined)
-    existingZone.startPositionX = startPositionX;
-  if (startPositionY !== undefined)
-    existingZone.startPositionY = startPositionY;
-  if (endPositionX !== undefined) existingZone.endPositionX = endPositionX;
-  if (endPositionY !== undefined) existingZone.endPositionY = endPositionY;
-  if (totalSlots !== undefined) existingZone.totalSlots = totalSlots;
-  if (
-    availableSlots !== undefined &&
-    occupiedSlots !== undefined &&
-    reservedSlots !== undefined
-  ) {
-    existingZone.availableSlots = availableSlots;
-    existingZone.occupiedSlots = occupiedSlots;
-    existingZone.reservedSlots = reservedSlots;
-  }
+  if (createdAt !== undefined) existingZone.createdAt = createdAt;
+  if (points !== undefined) existingZone.points = points;
+  if (color !== undefined) existingZone.color = color;
 
   if (floorCode !== undefined) {
     existingZone.floorCode = floor._id;
@@ -194,5 +128,49 @@ exports.updateZoneMap = async (payload) => {
   return {
     isCreate: false,
     data: existingZone,
+  };
+};
+
+// ======================
+// DELETE ZONE MAP
+// ======================
+exports.deleteZoneMap = async (floorCode, items = []) => {
+  if (!floorCode) throw new Error('Mã tầng là bắt buộc');
+  if (!Array.isArray(items) || items.length === 0)
+    throw new Error('Danh sách khu vực không hợp lệ');
+
+  const floor = await Floor.findOne({ code: floorCode });
+  if (!floor) throw new Error('Tầng không tồn tại');
+
+  const codes = items
+    .map((i) => i.code)
+    .filter((c) => typeof c === 'string' && c.trim() !== '');
+
+  if (codes.length === 0) throw new Error('Không tìm thấy mã zone hợp lệ');
+
+  const zones = await Zone.find({
+    code: { $in: codes },
+    floorCode: floor._id,
+  });
+
+  if (zones.length === 0) throw new Error('Zone không tồn tại trong tầng này');
+
+  const invalidZones = zones.filter((z) => z.status !== 0);
+  if (invalidZones.length > 0) {
+    const invalidCodes = invalidZones.map((z) => z.code);
+    throw new Error(
+      `Chỉ được xoá zone ở trạng thái "Đang chỉnh sửa": ${invalidCodes.join(
+        ', '
+      )}`
+    );
+  }
+
+  const result = await Zone.deleteMany({
+    code: { $in: codes },
+    floorCode: floor._id,
+  });
+
+  return {
+    deletedCount: result.deletedCount,
   };
 };

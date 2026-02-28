@@ -9,9 +9,14 @@ const ZoneParkingSchema = new mongoose.Schema(
       trim: true,
       default: '0',
     },
-    floorCode: {
+    nameGroupSlot: {
+      type: String,
+      required: true,
+      default: '',
+    },
+    zoneCode: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Floor',
+      ref: 'Zone',
       required: true,
     },
     status: {
@@ -24,25 +29,44 @@ const ZoneParkingSchema = new mongoose.Schema(
       required: true,
       default: 'Đang chỉnh sửa',
     },
-    nameZone: {
-      type: String,
-      required: true,
-      default: '',
-    },
     createdAt: {
       type: Date,
       default: Date.now,
     },
-    color: {
+    positionX: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+    positionY: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+    rotation: {
+      type: Number,
+      default: 0,
+    },
+    direction: {
       type: String,
       default: '',
     },
-    points: {
-      type: [Number], // mảng số
+    availableSlots: {
+      type: Number,
       required: true,
-      default: [],
+      default: 0,
+    },
+    occupiedSlots: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+    reservedSlots: {
+      type: Number,
+      required: true,
+      default: 0,
     },
   },
   { timestamps: true }
 );
-module.exports = mongoose.model('Zone', ZoneParkingSchema);
+module.exports = mongoose.model('GroupSlot', ZoneParkingSchema);

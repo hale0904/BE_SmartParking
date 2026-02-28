@@ -21,21 +21,6 @@ const FloorSchema = new mongoose.Schema(
       required: true,
       default: 0,
     },
-    totalZone: {
-      type: Number,
-      required: true,
-      default: 0,
-    },
-    entrances: {
-      type: Number,
-      required: true,
-      default: 0,
-    },
-    exits: {
-      type: Number,
-      required: true,
-      default: 0,
-    },
     status: {
       type: Number,
       required: true,
@@ -49,6 +34,17 @@ const FloorSchema = new mongoose.Schema(
     createdAt: {
       type: Date,
       default: Date.now,
+    },
+    boundary: {
+      points: {
+        type: [Number], // mảng số
+        required: true,
+        default: [],
+      },
+      closed: {
+        type: Boolean,
+        default: false,
+      },
     },
   },
   { timestamps: true }
