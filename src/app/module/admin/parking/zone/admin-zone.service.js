@@ -1,6 +1,6 @@
 const Zone = require('../../../../models/zone.model');
 const Floor = require('../../../../models/floor.model');
-const slotGroup = require('../../../../models/groupSLot.model');
+const slotGroup = require('../../../../models/groupSlot.model');
 
 const STATUS_MAP = {
   0: 'Đang chỉnh sửa',
