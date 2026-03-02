@@ -115,8 +115,25 @@ exports.updateMap = async (payload) => {
   }
 
   // ======================
-  // FLOORS
+  // FLOORS (2 chiều)
   // ======================
+  const dbFloors = await Floor.find({ parkingCode: parking._id });
+  const feFloorCodes = floors.map((f) => f.code);
+
+  // Xoá floor không còn trong FE (phải xoá con trước)
+  for (const dbFloor of dbFloors) {
+    if (!feFloorCodes.includes(dbFloor.code)) {
+      await Slot.deleteMany({ floorCode: dbFloor._id });
+      await GroupSlot.deleteMany({ floorCode: dbFloor._id });
+      await Zone.deleteMany({ floorCode: dbFloor._id });
+      await SlotStandalone.deleteMany({ floorCode: dbFloor._id });
+      await Lane.deleteMany({ floorCode: dbFloor._id });
+      await Exit.deleteMany({ floorCode: dbFloor._id });
+      await Entrance.deleteMany({ floorCode: dbFloor._id });
+      await Floor.deleteOne({ _id: dbFloor._id });
+    }
+  }
+
   for (const f of floors) {
     let floor = await Floor.findOne({ code: f.code });
 
@@ -131,17 +148,28 @@ exports.updateMap = async (payload) => {
         parkingCode: parking._id,
       });
     } else {
-      floor.nameFloor = f.nameFloor;
-      floor.level = f.level;
-      floor.status = f.status;
-      floor.statusName = STATUS_MAP[f.status];
-      floor.boundary = f.boundary;
+      Object.assign(floor, {
+        nameFloor: f.nameFloor,
+        level: f.level,
+        status: f.status,
+        statusName: STATUS_MAP[f.status],
+        boundary: f.boundary,
+      });
       await floor.save();
     }
 
     // ======================
-    // ENTRANCE
+    // ENTRANCE (2 chiều)
     // ======================
+    const dbEntrances = await Entrance.find({ floorCode: floor._id });
+    const feEntranceCodes = (f.entrances || []).map((e) => e.code);
+
+    for (const eDb of dbEntrances) {
+      if (!feEntranceCodes.includes(eDb.code)) {
+        await Entrance.deleteOne({ _id: eDb._id });
+      }
+    }
+
     for (const e of f.entrances || []) {
       let entrance = await Entrance.findOne({ code: e.code });
 
@@ -159,8 +187,17 @@ exports.updateMap = async (payload) => {
     }
 
     // ======================
-    // EXIT
+    // EXIT (2 chiều)
     // ======================
+    const dbExits = await Exit.find({ floorCode: floor._id });
+    const feExitCodes = (f.exits || []).map((x) => x.code);
+
+    for (const xDb of dbExits) {
+      if (!feExitCodes.includes(xDb.code)) {
+        await Exit.deleteOne({ _id: xDb._id });
+      }
+    }
+
     for (const x of f.exits || []) {
       let exit = await Exit.findOne({ code: x.code });
 
@@ -178,8 +215,17 @@ exports.updateMap = async (payload) => {
     }
 
     // ======================
-    // LANE
+    // LANE (2 chiều)
     // ======================
+    const dbLanes = await Lane.find({ floorCode: floor._id });
+    const feLaneCodes = (f.lanes || []).map((l) => l.code);
+
+    for (const lDb of dbLanes) {
+      if (!feLaneCodes.includes(lDb.code)) {
+        await Lane.deleteOne({ _id: lDb._id });
+      }
+    }
+
     for (const l of f.lanes || []) {
       let lane = await Lane.findOne({ code: l.code });
 
@@ -197,8 +243,17 @@ exports.updateMap = async (payload) => {
     }
 
     // ======================
-    // SLOT STANDALONE
+    // SLOT STANDALONE (2 chiều)
     // ======================
+    const dbSS = await SlotStandalone.find({ floorCode: floor._id });
+    const feSSCodes = (f.slotStandalone || []).map((s) => s.code);
+
+    for (const ssDb of dbSS) {
+      if (!feSSCodes.includes(ssDb.code)) {
+        await SlotStandalone.deleteOne({ _id: ssDb._id });
+      }
+    }
+
     for (const ss of f.slotStandalone || []) {
       let slotStandalone = await SlotStandalone.findOne({ code: ss.code });
 
@@ -216,8 +271,19 @@ exports.updateMap = async (payload) => {
     }
 
     // ======================
-    // ZONES
+    // ZONES (2 chiều)
     // ======================
+    const dbZones = await Zone.find({ floorCode: floor._id });
+    const feZoneCodes = (f.zones || []).map((z) => z.code);
+
+    for (const zDb of dbZones) {
+      if (!feZoneCodes.includes(zDb.code)) {
+        await Slot.deleteMany({ zoneCode: zDb._id });
+        await GroupSlot.deleteMany({ zoneCode: zDb._id });
+        await Zone.deleteOne({ _id: zDb._id });
+      }
+    }
+
     for (const z of f.zones || []) {
       let zone = await Zone.findOne({ code: z.code });
 
@@ -234,8 +300,18 @@ exports.updateMap = async (payload) => {
       }
 
       // ======================
-      // GROUP SLOT
+      // GROUP SLOT (2 chiều)
       // ======================
+      const dbGroups = await GroupSlot.find({ zoneCode: zone._id });
+      const feGroupCodes = (z.groupSlots || []).map((g) => g.code);
+
+      for (const gDb of dbGroups) {
+        if (!feGroupCodes.includes(gDb.code)) {
+          await Slot.deleteMany({ groupSlotCode: gDb._id });
+          await GroupSlot.deleteOne({ _id: gDb._id });
+        }
+      }
+
       for (const g of z.groupSlots || []) {
         let group = await GroupSlot.findOne({ code: g.code });
 
@@ -252,8 +328,17 @@ exports.updateMap = async (payload) => {
         }
 
         // ======================
-        // SLOT
+        // SLOT (2 chiều)
         // ======================
+        const dbSlots = await Slot.find({ groupSlotCode: group._id });
+        const feSlotCodes = (g.slots || []).map((s) => s.code);
+
+        for (const sDb of dbSlots) {
+          if (!feSlotCodes.includes(sDb.code)) {
+            await Slot.deleteOne({ _id: sDb._id });
+          }
+        }
+
         for (const s of g.slots || []) {
           let slot = await Slot.findOne({ code: s.code });
 
@@ -276,77 +361,5 @@ exports.updateMap = async (payload) => {
   return {
     success: true,
     data: parking,
-  };
-};
-
-exports.deleteMap = async (items = []) => {
-  if (!Array.isArray(items) || items.length === 0) {
-    throw new Error('Danh sách bãi xe không hợp lệ');
-  }
-
-  // lấy danh sách code
-  const codes = items
-    .map((i) => i.code)
-    .filter((c) => typeof c === 'string' && c.trim() !== '');
-
-  if (!codes.length) {
-    throw new Error('Không có mã bãi xe hợp lệ');
-  }
-
-  // tìm parking
-  const parkings = await Parking.find({ code: { $in: codes } });
-
-  if (!parkings.length) {
-    throw new Error('Bãi xe không tồn tại');
-  }
-
-  // chỉ cho xoá status = 0
-  const invalid = parkings.filter((p) => p.status !== 0);
-  if (invalid.length) {
-    throw new Error(
-      `Chỉ xoá bãi xe ở trạng thái "Đang chỉnh sửa". Không hợp lệ: ${invalid
-        .map((p) => p.code)
-        .join(', ')}`
-    );
-  }
-
-  const parkingIds = parkings.map((p) => p._id);
-
-  // =====================
-  // FIND FLOORS
-  // =====================
-  const floors = await Floor.find({ parkingCode: { $in: parkingIds } });
-  const floorIds = floors.map((f) => f._id);
-
-  // =====================
-  // FIND ZONES
-  // =====================
-  const zones = await Zone.find({ floorCode: { $in: floorIds } });
-  const zoneIds = zones.map((z) => z._id);
-
-  // =====================
-  // FIND GROUP SLOTS
-  // =====================
-  const groups = await GroupSlot.find({ zoneCode: { $in: zoneIds } });
-  const groupIds = groups.map((g) => g._id);
-
-  // =====================
-  // DELETE CHILD FIRST
-  // =====================
-  await Slot.deleteMany({ groupSlotCode: { $in: groupIds } });
-  await GroupSlot.deleteMany({ _id: { $in: groupIds } });
-
-  await Zone.deleteMany({ _id: { $in: zoneIds } });
-
-  await Entrance.deleteMany({ floorCode: { $in: floorIds } });
-  await Exit.deleteMany({ floorCode: { $in: floorIds } });
-  await Lane.deleteMany({ floorCode: { $in: floorIds } });
-  await SlotStandalone.deleteMany({ floorCode: { $in: floorIds } });
-
-  await Floor.deleteMany({ _id: { $in: floorIds } });
-  await Parking.deleteMany({ _id: { $in: parkingIds } });
-
-  return {
-    deletedCount: parkings.length,
   };
 };

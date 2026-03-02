@@ -8,6 +8,6 @@ router.post('/getListMap', mapController.getListMap);
 // router.post('/getParkingDetail/', parkingController.getParkingDetail);
 router.post('/updateMap', mapController.updateMap);
 // router.post('/updateParkingStatus', parkingController.updateParkingStatus);
-router.delete('/deleteMap', mapController.deleteMap);
+// router.delete('/deleteMap', mapController.deleteMap);
 
 module.exports = router;
