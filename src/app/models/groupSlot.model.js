@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-const ZoneParkingSchema = new mongoose.Schema(
+const GroupSlotParkingSchema = new mongoose.Schema(
   {
     code: {
       type: String,
@@ -26,7 +26,7 @@ const ZoneParkingSchema = new mongoose.Schema(
     },
     statusName: {
       type: String,
-      required: true,
+      // required: true,
       default: 'Đang chỉnh sửa',
     },
     createdAt: {
@@ -51,6 +51,14 @@ const ZoneParkingSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    height: {
+      type: Number,
+      default: 0,
+    },
+    width: {
+      type: Number,
+      default: 0,
+    },
     availableSlots: {
       type: Number,
       required: true,
@@ -69,4 +77,4 @@ const ZoneParkingSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
-module.exports = mongoose.model('GroupSlot', ZoneParkingSchema);
+module.exports = mongoose.model('GroupSlot', GroupSlotParkingSchema);

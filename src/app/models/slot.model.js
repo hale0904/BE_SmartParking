@@ -14,9 +14,9 @@ const SlotParkingSchema = new mongoose.Schema(
       required: true,
       default: '',
     },
-    zoneCode: {
+    groupSlotCode: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Zone',
+      ref: 'GroupSlot',
       required: true,
     },
     status: {
@@ -26,19 +26,17 @@ const SlotParkingSchema = new mongoose.Schema(
     },
     statusName: {
       type: String,
-      required: true,
+      // required: true,
       default: 'Đang chỉnh sửa',
     },
-    positionX: {
-      type: Number,
-      required: true,
-      default: 0,
-    },
-    positionY: {
-      type: Number,
-      required: true,
-      default: 0,
-    },
+    // positionX: {
+    //   type: Number,
+    //   default: 0,
+    // },
+    // positionY: {
+    //   type: Number,
+    //   default: 0,
+    // },
     createdAt: {
       type: Date,
       default: Date.now,
@@ -56,6 +54,9 @@ const SlotParkingSchema = new mongoose.Schema(
       type: Boolean,
       required: true,
       default: true,
+    },
+    sensorStatus: {
+      type: Boolean,
     },
   },
   { timestamps: true }

@@ -18,7 +18,6 @@ const FloorSchema = new mongoose.Schema(
     },
     level: {
       type: Number,
-      required: true,
       default: 0,
     },
     status: {
