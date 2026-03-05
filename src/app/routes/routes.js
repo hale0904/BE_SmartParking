@@ -5,7 +5,7 @@ const parkingAdminRoutes = require('../module/admin/parking/parking/admin-parkin
 const floorAdminRoutes = require('../module/admin/parking/floor/admin-floor.route');
 const zoneAdminRoutes = require('../module/admin/parking/zone/admin-zone.route');
 const slotAdminRoutes = require('../module/admin/parking/slot/admin-slot.route');
-
+const mapAdminRoutes = require('../module/admin/parking/map/admin-map.route');
 const authUserRoutes = require('../module/users/auth/user-auth.route');
 const parkingUserRoutes = require('../module/users/parking/user-parking.route');
 
@@ -18,6 +18,7 @@ router.use('/api/ad', [
   floorAdminRoutes,
   slotAdminRoutes,
   zoneAdminRoutes,
+  mapAdminRoutes,
 ]);
 
 // User

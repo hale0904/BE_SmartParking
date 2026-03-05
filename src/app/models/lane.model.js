@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-const ZoneParkingSchema = new mongoose.Schema(
+const LaneParkingSchema = new mongoose.Schema(
   {
     code: {
       type: String,
@@ -14,35 +14,46 @@ const ZoneParkingSchema = new mongoose.Schema(
       ref: 'Floor',
       required: true,
     },
+    positionX: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+    positionY: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+    height: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+    witdh: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+    rotation: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
     status: {
       type: Number,
       required: true,
-      default: 0, // 0: trống, 1: đã đặt, 2: đang sử dụng
+      default: 0,
     },
     statusName: {
       type: String,
       required: true,
       default: 'Đang chỉnh sửa',
     },
-    nameZone: {
-      type: String,
-      required: true,
-      default: '',
-    },
     createdAt: {
       type: Date,
       default: Date.now,
     },
-    color: {
-      type: String,
-      default: '',
-    },
-    points: {
-      type: [Number], // mảng số
-      required: true,
-      default: [],
-    },
   },
   { timestamps: true }
 );
-module.exports = mongoose.model('Zone', ZoneParkingSchema);
+module.exports = mongoose.model('Lane', LaneParkingSchema);
