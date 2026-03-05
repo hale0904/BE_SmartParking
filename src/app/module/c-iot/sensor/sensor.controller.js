@@ -1,11 +1,11 @@
 const sensorService = require('./sensor.service');
 
-// Create or Update parking map
-exports.updateMap = async (req, res) => {
+exports.updateSensor = async (req, res) => {
   try {
+
     const payload = {
       ...req.body,
-      adminCode: req.admin?.code, // lấy từ token (nếu có auth)
+      adminCode: req.admin?.code
     };
 
     const result = await sensorService.updateSensor(payload);
@@ -13,13 +13,17 @@ exports.updateMap = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: 'Cập nhật sensor thành công',
-      data: result.data,
+      data: result.data
     });
+
   } catch (error) {
+
     console.error(error);
+
     return res.status(400).json({
       success: false,
-      message: error.message,
+      message: error.message
     });
+
   }
 };

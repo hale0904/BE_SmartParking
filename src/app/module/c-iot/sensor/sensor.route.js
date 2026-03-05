@@ -1,9 +1,9 @@
 const express = require('express');
-const sensorController = require('./sensor.service');
+const sensorController = require('./sensor.controller');
 
 const router = express.Router();
 
 // routes
-router.post('/updateSensor', sensorController.updateSensor);
+router.post('/sensor', sensorController.updateSensor);
 
 module.exports = router;

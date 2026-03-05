@@ -20,8 +20,12 @@ router.use('/api/ad', [
   slotAdminRoutes,
   zoneAdminRoutes,
   mapAdminRoutes,
-  sensorRouter,
+
 ]);
+
+router.use('/api', [
+  sensorRouter,
+])
 
 // User
 router.use('/api/us', [authUserRoutes, parkingUserRoutes]);
