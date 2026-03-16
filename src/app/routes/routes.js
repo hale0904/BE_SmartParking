@@ -9,6 +9,7 @@ const mapAdminRoutes = require('../module/admin/parking/map/admin-map.route');
 const authUserRoutes = require('../module/users/auth/user-auth.route');
 const parkingUserRoutes = require('../module/users/parking/user-parking.route');
 const sensorRouter = require('../module/c-iot/sensor/sensor.route');
+const vehiclesRoutes = require('../module/users/vehicles/vehicles.route');
 
 const router = express.Router();
 
@@ -20,14 +21,11 @@ router.use('/api/ad', [
   slotAdminRoutes,
   zoneAdminRoutes,
   mapAdminRoutes,
-
 ]);
 
-router.use('/api', [
-  sensorRouter,
-])
+router.use('/api', [sensorRouter]);
 
 // User
-router.use('/api/us', [authUserRoutes, parkingUserRoutes]);
+router.use('/api/us', [authUserRoutes, parkingUserRoutes, vehiclesRoutes]);
 
 module.exports = router;
