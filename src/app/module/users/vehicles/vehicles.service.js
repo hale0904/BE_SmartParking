@@ -7,8 +7,13 @@ const STATUS_VEHILCES = {
 };
 
 // Get list parking map with filter and search
-exports.getListVehicles = async (status, keyword) => {
-  const filter = {};
+exports.getListVehicles = async (status, keyword, userId) => {
+  if (userId == null || userId == '') {
+    throw new Error('Thiếu mã của người dùng');
+  }
+
+  const user = await userModel.findOne({ code: userId });
+  const filter = { userId: user._id };
 
   // filter theo status (dropdown)
   if (status !== undefined && status !== null && status !== '') {
@@ -20,6 +25,10 @@ exports.getListVehicles = async (status, keyword) => {
     const regex = new RegExp(keyword.trim(), 'i'); // không phân biệt hoa thường
 
     filter.$or = [{ nameVehicles: regex }, { licensePlate: regex }];
+  }
+
+  if (!user) {
+    throw new Error('Người dùng không hợp lệ');
   }
 
   const vehilces = await vehilcesModel

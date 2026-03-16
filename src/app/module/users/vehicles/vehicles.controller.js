@@ -3,9 +3,9 @@ const vehilcesService = require('./vehicles.service');
 // Get list vehilces
 exports.getListVehicles = async (req, res) => {
   try {
-    const { status, keyword } = req.body;
+    const { status, keyword, userId } = req.body;
 
-    const data = await vehilcesService.getListVehicles(status, keyword);
+    const data = await vehilcesService.getListVehicles(status, keyword, userId);
     return res.status(200).json({
       success: true,
       data,
@@ -14,7 +14,7 @@ exports.getListVehicles = async (req, res) => {
     console.error(error);
     return res.status(500).json({
       success: false,
-      message: 'Server error',
+      message: error.message,
     });
   }
 };

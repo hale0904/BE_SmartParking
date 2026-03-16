@@ -32,7 +32,8 @@ exports.loginUser = async (req, res) => {
 // Handler register
 exports.registerUser = async (req, res) => {
   try {
-    const { code, userName, email, password, confirmPassword } = req.body;
+    const { code, userName, email, password, confirmPassword, phone } =
+      req.body;
 
     if (!email || !password || !confirmPassword) {
       return res.status(400).json({
@@ -53,6 +54,7 @@ exports.registerUser = async (req, res) => {
       userName,
       email,
       password,
+      phone,
     });
 
     return res.status(201).json({

@@ -36,7 +36,7 @@ exports.loginUser = async ({ email, password }) => {
   };
 };
 
-exports.registerUser = async ({ code, userName, email, password }) => {
+exports.registerUser = async ({ code, userName, email, password, phone }) => {
   const existingUser = await User.findOne({ email });
   if (existingUser) {
     throw new Error('User already exists');
@@ -48,6 +48,7 @@ exports.registerUser = async ({ code, userName, email, password }) => {
     code,
     userName,
     email,
+    phone,
     password: hashedPassword,
   });
 
