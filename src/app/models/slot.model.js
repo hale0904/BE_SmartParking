@@ -29,14 +29,6 @@ const SlotParkingSchema = new mongoose.Schema(
       // required: true,
       default: 'Đang chỉnh sửa',
     },
-    // positionX: {
-    //   type: Number,
-    //   default: 0,
-    // },
-    // positionY: {
-    //   type: Number,
-    //   default: 0,
-    // },
     createdAt: {
       type: Date,
       default: Date.now,

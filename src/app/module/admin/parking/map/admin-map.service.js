@@ -14,6 +14,13 @@ const STATUS_MAP = {
   2: 'Ngưng hoạt động',
 };
 
+const STATUS_SLOT = {
+  0: 'Vị trí trống',
+  1: 'Vị trí có xe',
+  2: 'Vị trí đặt trước',
+  3: 'Vị trí lỗi/ Vị trí đang chỉnh sửa',
+};
+
 exports.getListMap = async (status, keyword) => {
   const filter = {};
 
@@ -346,11 +353,11 @@ exports.updateMap = async (payload) => {
             await Slot.create({
               ...s,
               groupSlotCode: group._id,
-              statusName: STATUS_MAP[s.status],
+              statusName: STATUS_SLOT[s.status],
             });
           } else {
             Object.assign(slot, s);
-            slot.statusName = STATUS_MAP[s.status];
+            slot.statusName = STATUS_SLOT[s.status];
             await slot.save();
           }
         }
