@@ -2,88 +2,120 @@ const Parking = require('../../../models/parking.model');
 const Floor = require('../../../models/floor.model');
 const Zone = require('../../../models/zone.model');
 const Slot = require('../../../models/slot.model');
+const GroupSlot = require('../../../models/groupSlot.model');
+const Entrance = require('../../../models/entrances.model');
+const Exit = require('../../../models/exit.model');
+const Lane = require('../../../models/lane.model');
+const SlotStandalone = require('../../../models/standaloneSlot.model');
 
-exports.getParkingMap = async (parkingCode) => {
-  const parking = await Parking.findOne({ code: parkingCode });
-  if (!parking) {
-    throw new Error('Parking not found');
+const STATUS_SLOT = {
+  0: 'Vị trí trống',
+  1: 'Vị trí có xe',
+  2: 'Vị trí đặt trước',
+  3: 'Vị trí lỗi/ Vị trí đang chỉnh sửa',
+};
+
+exports.getParkingMap = async (status, expectedArrivalTime) => {
+  const filter = {};
+
+  // filter theo status
+  if (status !== undefined && status !== null && status !== '') {
+    filter.status = Number(status);
   }
 
-  // Lấy tầng
-  const floors = await Floor.find({ parkingCode: parking._id }).sort({
-    level: 1,
-  });
+  const parkings = await Parking.find(filter)
+    .select('code name location status statusName totalFloors')
+    .lean();
 
-  const floorIds = floors.map((f) => f._id);
+  const result = [];
 
-  // Lấy zone theo floor
-  const zones = await Zone.find({
-    floorCode: { $in: floorIds },
-  });
+  for (const parking of parkings) {
+    // ===== FLOOR =====
+    const floors = await Floor.find({
+      parkingCode: parking._id,
+      status: 1,
+    }).lean();
 
-  const zoneIds = zones.map((z) => z._id);
+    for (const floor of floors) {
+      // ===== ENTRANCE / EXIT / LANE / SLOT STANDALONE =====
+      const [entrances, exits, lanes, slotStandalone] = await Promise.all([
+        Entrance.find({ floorCode: floor._id }).lean(),
+        Exit.find({ floorCode: floor._id }).lean(),
+        Lane.find({ floorCode: floor._id }).lean(),
+        SlotStandalone.find({ floorCode: floor._id }).lean(),
+      ]);
 
-  // Lấy slot theo zone
-  const slots = await Slot.find({
-    zoneCode: { $in: zoneIds },
-  });
+      // ===== ZONE =====
+      const zones = await Zone.find({ floorCode: floor._id, status: 1 }).lean();
 
-  return {
-    code: parking.code,
-    name: parking.name,
-    location: parking.location,
-    status: parking.status,
-    statusName: parking.statusName,
-    totalFloors: parking.totalFloors,
+      for (const zone of zones) {
+        // ===== GROUP SLOT =====
+        const groups = await GroupSlot.find({ zoneCode: zone._id }).lean();
 
-    floors: floors.map((f) => {
-      const floorZones = zones.filter(
-        (z) => z.floorCode.toString() === f._id.toString()
-      );
+        for (const group of groups) {
+          const slots = await Slot.find({ groupSlotCode: group._id }).lean();
 
-      return {
-        code: f.code,
-        nameFloor: f.nameFloor,
-        level: f.level,
-        totalZone: f.totalZone,
-        entrances: f.entrances,
-        exits: f.exits,
-        availableSlots: f.availableSlots,
-        occupiedSlots: f.occupiedSlots,
-        reservedSlots: f.reservedSlots,
-        status: f.status,
-        statusName: f.statusName,
+          const arrivalInput = new Date(expectedArrivalTime);
 
-        zones: floorZones.map((z) => {
-          const zoneSlots = slots.filter(
-            (s) => s.zoneCode.toString() === z._id.toString()
-          );
+          const timeNow = new Date();
 
-          return {
-            code: z.code,
-            nameZone: z.nameZone,
-            totalSlots: z.totalSlots,
-            status: z.status,
-            statusName: z.statusName,
-            startPositionX: z.startPositionX,
-            startPositionY: z.startPositionY,
-            endPositionX: z.endPositionX,
-            endPositionY: z.endPositionY,
+          // đầu ngày hôm nay
+          const startDay = new Date();
+          startDay.setHours(0, 0, 0, 0);
 
-            slots: zoneSlots.map((s) => ({
-              code: s.code,
-              nameSlot: s.nameSlot,
-              x: s.positionX,
-              y: s.positionY,
-              status: s.status,
-              statusName: s.statusName,
-              isSensorReal: s.isSensorReal,
-              sensorId: s.sensorId,
-              isActive: s.isActive,
-            })),
-          };
-        }),
-      };
-    }),
-  };
+          // cuối ngày hôm nay
+          const endDay = new Date();
+          endDay.setHours(23, 59, 59, 999);
+
+          // +4h từ thời gian user chọn
+          const plus4Hours = new Date(timeNow.getTime() + 4 * 60 * 60 * 1000);
+
+          const validSlots = [];
+
+          for (const slot of slots) {
+            // trong hôm nay
+            if (arrivalInput >= startDay && arrivalInput <= endDay) {
+              // theo thời gian user chọn
+              if (arrivalInput <= plus4Hours) {
+                // slot trống
+                if (slot.status === 0) {
+                  validSlots.push(slot);
+                }
+              }
+              if (arrivalInput > plus4Hours) {
+                if (slot.status === 1 || slot.status === 0) {
+                  validSlots.push(slot);
+                }
+              }
+            }
+            if (arrivalInput >= startDay && arrivalInput >= endDay) {
+              if (slot.status === 0 || slot.status === 2) {
+                validSlots.push(slot);
+              }
+            }
+          }
+
+          if (!expectedArrivalTime) {
+            group.slots = slots;
+          } else {
+            // FIX QUAN TRỌNG
+            group.slots = validSlots;
+          }
+        }
+
+        zone.groupSlots = groups;
+      }
+
+      floor.entrances = entrances;
+      floor.exits = exits;
+      floor.lanes = lanes;
+      floor.slotStandalone = slotStandalone;
+      floor.zones = zones;
+    }
+
+    parking.floors = floors;
+    result.push(parking);
+  }
+
+  return result;
 };

@@ -7,10 +7,11 @@ const BookingSchema = new mongoose.Schema(
       required: true,
       unique: true,
       trim: true,
+      default: '',
     },
     userId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Users',
+      ref: 'User',
       required: true,
     },
     slotId: {
@@ -27,13 +28,21 @@ const BookingSchema = new mongoose.Schema(
       type: Date,
       require: true,
     },
-    expiredAt: {
-      type: Date,
-      require: true,
-    },
+    // expectedLeaveTime: {
+    //   type: Date,
+    //   require: true,
+    // },
     status: {
       type: Number,
       require: true,
+    },
+    statusName: {
+      type: String,
+      default: '',
+    },
+    licensePlate: {
+      type: String,
+      default: '',
     },
   },
   { timestamps: true }
