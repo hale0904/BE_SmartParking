@@ -7,6 +7,7 @@ const Entrance = require('../../../../models/entrances.model');
 const Exit = require('../../../../models/exit.model');
 const Lane = require('../../../../models/lane.model');
 const SlotStandalone = require('../../../../models/standaloneSlot.model');
+const laneNodeModel = require('../../../../models/laneNode.model');
 
 const STATUS_MAP = {
   0: 'Đang chỉnh sửa',
@@ -47,12 +48,14 @@ exports.getListMap = async (status, keyword) => {
 
     for (const floor of floors) {
       // ===== ENTRANCE / EXIT / LANE / SLOT STANDALONE =====
-      const [entrances, exits, lanes, slotStandalone] = await Promise.all([
-        Entrance.find({ floorCode: floor._id }).lean(),
-        Exit.find({ floorCode: floor._id }).lean(),
-        Lane.find({ floorCode: floor._id }).lean(),
-        SlotStandalone.find({ floorCode: floor._id }).lean(),
-      ]);
+      const [entrances, exits, lanes, slotStandalone, laneNodes] =
+        await Promise.all([
+          Entrance.find({ floorCode: floor._id }).lean(),
+          Exit.find({ floorCode: floor._id }).lean(),
+          Lane.find({ floorCode: floor._id }).lean(),
+          SlotStandalone.find({ floorCode: floor._id }).lean(),
+          laneNodeModel.find({ floorCode: floor._id }).lean(),
+        ]);
 
       // ===== ZONE =====
       const zones = await Zone.find({ floorCode: floor._id }).lean();
@@ -73,6 +76,7 @@ exports.getListMap = async (status, keyword) => {
       floor.entrances = entrances;
       floor.exits = exits;
       floor.lanes = lanes;
+      floor.laneNodes = laneNodes;
       floor.slotStandalone = slotStandalone;
       floor.zones = zones;
     }
@@ -222,28 +226,86 @@ exports.updateMap = async (payload) => {
     }
 
     // ======================
+    // LANENODE (2 chiều)
+    // ======================
+    const dbLaneNodes = await laneNodeModel.find({ floorCode: floor._id });
+    const feLaneNodeCodes = (f.laneNodes || []).map((n) => n.code);
+
+    // xoá
+    for (const lnDb of dbLaneNodes) {
+      if (!feLaneNodeCodes.includes(lnDb.code)) {
+        await laneNodeModel.deleteOne({ _id: lnDb._id });
+      }
+    }
+
+    // create/update
+    for (const n of f.laneNodes || []) {
+      let laneNode = await laneNodeModel.findOne({ code: n.code });
+
+      if (!laneNode) {
+        await laneNodeModel.create({
+          ...n,
+          floorCode: floor._id,
+        });
+      } else {
+        Object.assign(laneNode, n);
+        await laneNode.save();
+      }
+    }
+
+    // ======================
+    // TẠO nodeMap (QUAN TRỌNG)
+    // ======================
+    const laneNodes = await laneNodeModel.find({ floorCode: floor._id });
+
+    const nodeMap = {};
+    for (const n of laneNodes) {
+      nodeMap[n.code] = n._id;
+    }
+
+    // ======================
     // LANE (2 chiều)
     // ======================
     const dbLanes = await Lane.find({ floorCode: floor._id });
     const feLaneCodes = (f.lanes || []).map((l) => l.code);
 
+    // xoá
     for (const lDb of dbLanes) {
       if (!feLaneCodes.includes(lDb.code)) {
         await Lane.deleteOne({ _id: lDb._id });
       }
     }
 
+    // create/update
     for (const l of f.lanes || []) {
-      let lane = await Lane.findOne({ code: l.code });
+      let lane = await Lane.findOne({
+        code: l.code,
+        floorCode: floor._id,
+      });
+
+      const fromNodeId = nodeMap[l.fromNodeId];
+      const toNodeId = nodeMap[l.toNodeId];
+
+      if (!fromNodeId || !toNodeId) {
+        throw new Error(
+          `Node không tồn tại: ${l.fromNodeId} hoặc ${l.toNodeId}`
+        );
+      }
 
       if (!lane) {
         await Lane.create({
           ...l,
           floorCode: floor._id,
+          fromNodeId,
+          toNodeId,
           statusName: STATUS_MAP[l.status],
         });
       } else {
-        Object.assign(lane, l);
+        Object.assign(lane, {
+          ...l,
+          fromNodeId,
+          toNodeId,
+        });
         lane.statusName = STATUS_MAP[l.status];
         await lane.save();
       }

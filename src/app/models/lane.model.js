@@ -14,25 +14,30 @@ const LaneParkingSchema = new mongoose.Schema(
       ref: 'Floor',
       required: true,
     },
-    positionX: {
+    // positionX: {
+    //   type: Number,
+    //   required: true,
+    //   default: 0,
+    // },
+    // positionY: {
+    //   type: Number,
+    //   required: true,
+    //   default: 0,
+    // },
+    // height: {
+    //   type: Number,
+    //   required: true,
+    //   default: 0,
+    // },
+    laneWidth: {
       type: Number,
       required: true,
       default: 0,
     },
-    positionY: {
-      type: Number,
-      required: true,
-      default: 0,
-    },
-    height: {
-      type: Number,
-      required: true,
-      default: 0,
-    },
-    witdh: {
-      type: Number,
-      required: true,
-      default: 0,
+    points: {
+      type: [Number],
+      require: true,
+      default: [],
     },
     rotation: {
       type: Number,
@@ -52,6 +57,16 @@ const LaneParkingSchema = new mongoose.Schema(
     createdAt: {
       type: Date,
       default: Date.now,
+    },
+    fromNodeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'LaneNode',
+      required: true,
+    },
+    toNodeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'LaneNode',
+      required: true,
     },
   },
   { timestamps: true }
