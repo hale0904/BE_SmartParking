@@ -7,6 +7,7 @@ const Entrance = require('../../../models/entrances.model');
 const Exit = require('../../../models/exit.model');
 const Lane = require('../../../models/lane.model');
 const SlotStandalone = require('../../../models/standaloneSlot.model');
+const bookingModel = require('../../../models/booking.model');
 
 const STATUS_SLOT = {
   0: 'Vị trí trống',
@@ -15,7 +16,11 @@ const STATUS_SLOT = {
   3: 'Vị trí lỗi/ Vị trí đang chỉnh sửa',
 };
 
-exports.getParkingMap = async (status, expectedArrivalTime) => {
+exports.getParkingMap = async (
+  status,
+  expectedArrivalTime,
+  expectedLeaveTime
+) => {
   const filter = {};
 
   // filter theo status
@@ -55,52 +60,107 @@ exports.getParkingMap = async (status, expectedArrivalTime) => {
         for (const group of groups) {
           const slots = await Slot.find({ groupSlotCode: group._id }).lean();
 
-          const arrivalInput = new Date(expectedArrivalTime);
+          const arrivalInput = expectedArrivalTime
+            ? new Date(expectedArrivalTime)
+            : null;
 
-          const timeNow = new Date();
-
-          // đầu ngày hôm nay
-          const startDay = new Date();
-          startDay.setHours(0, 0, 0, 0);
-
-          // cuối ngày hôm nay
-          const endDay = new Date();
-          endDay.setHours(23, 59, 59, 999);
-
-          // +4h từ thời gian user chọn
-          const plus4Hours = new Date(timeNow.getTime() + 4 * 60 * 60 * 1000);
+          const leaveInput = expectedLeaveTime
+            ? new Date(expectedLeaveTime)
+            : null;
 
           const validSlots = [];
+          // đầu ngày hôm nay
+          // const startDay = new Date();
+          // startDay.setHours(0, 0, 0, 0);
+
+          // cuối ngày hôm nay
+          // const endDay = new Date();
+          // endDay.setHours(23, 59, 59, 999);
+
+          // +4h từ thời gian user chọn
+          // const plus4Hours = new Date(timeNow.getTime() + 4 * 60 * 60 * 1000);
 
           for (const slot of slots) {
-            // trong hôm nay
-            if (arrivalInput >= startDay && arrivalInput <= endDay) {
-              // theo thời gian user chọn
-              if (arrivalInput <= plus4Hours) {
-                // slot trống
-                if (slot.status === 0) {
-                  validSlots.push(slot);
+            // const timeNow = new Date();
+
+            // const isToday =
+            //   arrivalInput.toDateString() === timeNow.toDateString();
+
+            const bookings = await bookingModel
+              .find({ slotId: slot._id })
+              .lean();
+
+            // =========================
+            // CASE 1: KHÔNG truyền thời gian
+            // =========================
+            const now = new Date();
+
+            if (slot.status === 0 || slot.status === 2) {
+              if (!arrivalInput && !leaveInput) {
+                const activeBooking = bookings.find(
+                  (b) =>
+                    b.slotId.toString() === slot._id.toString() &&
+                    b.expectedArrivalTime <= now &&
+                    b.expectedLeaveTime >= now
+                );
+
+                if (activeBooking) {
+                  validSlots.push({
+                    ...slot,
+                    status: 2,
+                    statusName: STATUS_SLOT[2],
+                  });
                 }
-              }
-              if (arrivalInput > plus4Hours) {
-                if (slot.status === 1 || slot.status === 0) {
-                  validSlots.push(slot);
+
+                if (!activeBooking) {
+                  validSlots.push({
+                    ...slot,
+                    status: 0,
+                    statusName: STATUS_SLOT[0],
+                  });
                 }
+
+                continue;
               }
             }
-            if (arrivalInput >= startDay && arrivalInput >= endDay) {
-              if (slot.status === 0 || slot.status === 2) {
-                validSlots.push(slot);
+
+            // =========================
+            // CASE 2: CÓ chọn thời gian
+            // =========================
+            if (arrivalInput && leaveInput) {
+              const activeBooking = bookings.find(
+                (b) =>
+                  b.slotId.toString() === slot._id.toString() &&
+                  b.expectedArrivalTime > arrivalInput &&
+                  b.expectedLeaveTime < leaveInput
+              );
+
+              if (activeBooking) {
+                validSlots.push({
+                  ...slot,
+                  status: 2,
+                  statusName: STATUS_SLOT[2],
+                });
               }
+
+              if (!activeBooking && slot.status !== 3) {
+                validSlots.push({
+                  ...slot,
+                  status: 0,
+                  statusName: STATUS_SLOT[0],
+                });
+              }
+
+              continue;
             }
           }
 
-          if (!expectedArrivalTime) {
-            group.slots = slots;
-          } else {
-            // FIX QUAN TRỌNG
-            group.slots = validSlots;
-          }
+          // if (!expectedArrivalTime) {
+          //   group.slots = bookings;
+          // } else {
+          // FIX QUAN TRỌNG
+          group.slots = validSlots;
+          // }
         }
 
         zone.groupSlots = groups;

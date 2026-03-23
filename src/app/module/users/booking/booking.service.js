@@ -37,7 +37,7 @@ exports.getListBooking = async (status, keyword, userId) => {
   const booking = await bookingModel
     .find(filter)
     .select(
-      'code vehiclesId slotId userId status statusName licensePlate expectedArrivalTime licensePlate'
+      'code vehiclesId slotId userId status statusName licensePlate expectedArrivalTime expectedLeaveTime'
     )
     .populate('slotId', 'code nameSlot')
     .populate('userId', 'code userName email phone')
@@ -47,9 +47,22 @@ exports.getListBooking = async (status, keyword, userId) => {
 };
 
 exports.bookingSlot = async (payload) => {
-  const { userId, slotId, vehiclesId, expectedArrivalTime, status } = payload;
+  const {
+    userId,
+    slotId,
+    vehiclesId,
+    expectedArrivalTime,
+    expectedLeaveTime,
+    status,
+  } = payload;
 
-  if (!userId || !slotId || !vehiclesId || !expectedArrivalTime) {
+  if (
+    !userId ||
+    !slotId ||
+    !vehiclesId ||
+    !expectedArrivalTime ||
+    !expectedLeaveTime
+  ) {
     throw new Error('Thiếu thông tin đặt chỗ');
   }
 
@@ -61,8 +74,30 @@ exports.bookingSlot = async (payload) => {
   if (!vehicle) throw new Error('Xe không tồn tại');
   if (!slot) throw new Error('Slot không tồn tại');
 
-  if (slot.status !== 0) {
-    throw new Error('Slot không trống');
+  const BUFFER = 15 * 60 * 1000; // 15 phút
+
+  const arrival = new Date(expectedArrivalTime);
+  const leave = new Date(expectedLeaveTime);
+
+  // nới rộng khoảng thời gian
+  const arrivalWithBuffer = new Date(arrival.getTime() - BUFFER);
+  const leaveWithBuffer = new Date(leave.getTime() + BUFFER);
+
+  // validate trước
+  if (leave <= arrival) {
+    throw new Error('Thời gian không hợp lệ');
+  }
+
+  // check trùng giờ (OVERLAP)
+  const isConflict = await bookingModel.findOne({
+    slotId: slot._id,
+    status: { $in: [1, 2] },
+    expectedArrivalTime: { $lt: leaveWithBuffer },
+    expectedLeaveTime: { $gt: arrivalWithBuffer },
+  });
+
+  if (isConflict) {
+    throw new Error('Vị trí đã được đặt trong khoảng thời gian này');
   }
 
   const count = await bookingModel.countDocuments();
@@ -77,6 +112,7 @@ exports.bookingSlot = async (payload) => {
     slotId: slot._id,
     vehiclesId: vehicle._id,
     expectedArrivalTime,
+    expectedLeaveTime,
     status: finalStatus,
     statusName: STATUS_SLOT[finalStatus],
     licensePlate: vehicle.licensePlate,
