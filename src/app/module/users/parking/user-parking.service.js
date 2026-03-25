@@ -95,34 +95,45 @@ exports.getParkingMap = async (
             // =========================
             const now = new Date();
 
-            if (slot.status === 0 || slot.status === 2) {
-              if (!arrivalInput && !leaveInput) {
-                const activeBooking = bookings.find(
-                  (b) =>
-                    b.slotId.toString() === slot._id.toString() &&
-                    b.expectedArrivalTime <= now &&
-                    b.expectedLeaveTime >= now
-                );
+            // if (
+            //   slot.status === 0 ||
+            //   slot.status === 2 ||
+            //   slot.status === 3 ||
+            //   slot.status === 1
+            // ) {
+            if (!arrivalInput && !leaveInput) {
+              const activeBooking = bookings.find(
+                (b) =>
+                  b.slotId.toString() === slot._id.toString() &&
+                  b.expectedArrivalTime <= now &&
+                  b.expectedLeaveTime >= now
+              );
 
-                if (activeBooking) {
-                  validSlots.push({
-                    ...slot,
-                    status: 2,
-                    statusName: STATUS_SLOT[2],
-                  });
-                }
-
-                if (!activeBooking) {
-                  validSlots.push({
-                    ...slot,
-                    status: 0,
-                    statusName: STATUS_SLOT[0],
-                  });
-                }
-
-                continue;
+              if (activeBooking) {
+                validSlots.push({
+                  ...slot,
+                  status: 2,
+                  statusName: STATUS_SLOT[2],
+                });
               }
+
+              if (!activeBooking && slot.status === 2) {
+                validSlots.push({
+                  ...slot,
+                  status: 0,
+                  statusName: STATUS_SLOT[0],
+                });
+              }
+
+              if (!activeBooking) {
+                validSlots.push({
+                  ...slot,
+                });
+              }
+
+              continue;
             }
+            // }
 
             // =========================
             // CASE 2: CÓ chọn thời gian
