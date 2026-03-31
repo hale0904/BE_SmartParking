@@ -1,6 +1,5 @@
 const authService = require('./user-auth.service');
 
-// Handler login
 exports.loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -12,15 +11,16 @@ exports.loginUser = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Login successful',
+      message: 'Đăng nhập thành công',
       data: {
-        // id: user._id,
+        id: user._id,
         code: user.code,
+        userName: user.userName,
         email: user.email,
         role: user.role,
+        accessToken,
+        refreshToken,
       },
-      // accessToken,
-      // refreshToken,
     });
   } catch (err) {
     return res.status(401).json({
@@ -30,23 +30,29 @@ exports.loginUser = async (req, res) => {
   }
 };
 
-// Handler register
 exports.registerUser = async (req, res) => {
   try {
     const { code, userName, email, password, confirmPassword, phone } =
       req.body;
 
-    if (!email || !password || !confirmPassword) {
+    if (
+      !code ||
+      !userName ||
+      !email ||
+      !phone ||
+      !password ||
+      !confirmPassword
+    ) {
       return res.status(400).json({
         success: false,
-        message: 'All fields are required',
+        message: 'Vui lòng nhập đầy đủ thông tin',
       });
     }
 
     if (password !== confirmPassword) {
       return res.status(400).json({
         success: false,
-        message: 'Passwords do not match',
+        message: 'Mật khẩu xác nhận không khớp',
       });
     }
 
@@ -60,13 +66,72 @@ exports.registerUser = async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: 'User registered successfully',
-      // userId: user._id,
+      message:
+        'Đăng ký thành công. Vui lòng kiểm tra Gmail để xác nhận tài khoản',
+      data: {
+        id: user._id,
+        email: user.email,
+      },
     });
   } catch (err) {
     return res.status(400).json({
       success: false,
       message: err.message,
+    });
+  }
+};
+
+exports.verifyEmail = async (req, res) => {
+  try {
+    const { token } = req.query;
+
+    await authService.verifyEmail(token);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Xác nhận email thành công',
+    });
+  } catch (err) {
+    return res.status(400).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+exports.forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    await authService.forgotPassword(email);
+
+    return res.json({
+      success: true,
+      message: 'Đã gửi email khôi phục mật khẩu',
+    });
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+exports.resetPassword = async (req, res) => {
+  try {
+    const { token } = req.query;
+    const { password } = req.body;
+
+    await authService.resetPassword(token, password);
+
+    return res.json({
+      success: true,
+      message: 'Đặt lại mật khẩu thành công',
+    });
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      message: error.message,
     });
   }
 };
