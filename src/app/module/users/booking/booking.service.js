@@ -16,22 +16,21 @@ exports.getListBooking = async (status, keyword, userId) => {
   }
 
   const user = await userModel.findOne({ code: userId });
+
+  if (!user) {
+    throw new Error('Người dùng không hợp lệ');
+  }
+
   const filter = { userId: user._id };
 
-  // filter theo status (dropdown)
   if (status !== undefined && status !== null && status !== '') {
     filter.status = Number(status);
   }
 
-  // search theo nameVehicles + licensePlate
   if (keyword && keyword.trim() !== '') {
-    const regex = new RegExp(keyword.trim(), 'i'); // không phân biệt hoa thường
+    const regex = new RegExp(keyword.trim(), 'i');
 
     filter.$or = [{ licensePlate: regex }];
-  }
-
-  if (!user) {
-    throw new Error('Người dùng không hợp lệ');
   }
 
   const booking = await bookingModel

@@ -1,11 +1,15 @@
 const express = require('express');
 const parkingController = require('./user-parking.controller');
+const {
+  authUserMiddleware,
+} = require('../../../middlewares/authUser.middleware');
 
 const router = express.Router();
 
-// router.post('/getListFloorMap', floorController.getListFloorMap);
-router.post('/getParkingMap', parkingController.getParkingMap);
-// router.post('/getFloorDetailMap', floorController.getFloorDetailMap);
-// router.delete('/deleteFloorMap', floorController.deleteFloorMap);
+router.post(
+  '/getParkingMap',
+  authUserMiddleware,
+  parkingController.getParkingMap
+);
 
 module.exports = router;

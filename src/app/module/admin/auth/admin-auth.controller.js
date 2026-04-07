@@ -52,12 +52,12 @@ exports.loginAdmin = async (req, res) => {
       success: true,
       message: 'Login successful',
       data: {
-        // id: admin._id,
+        id: admin._id,
         email: admin.email,
         role: admin.role,
       },
-      // accessToken,
-      // refreshToken,
+      accessToken,
+      refreshToken,
     });
   } catch (err) {
     return res.status(401).json({

@@ -13,6 +13,11 @@ exports.getListVehicles = async (status, keyword, userId) => {
   }
 
   const user = await userModel.findOne({ code: userId });
+
+  if (!user) {
+    throw new Error('Người dùng không hợp lệ');
+  }
+
   const filter = { userId: user._id };
 
   // filter theo status (dropdown)
@@ -25,10 +30,6 @@ exports.getListVehicles = async (status, keyword, userId) => {
     const regex = new RegExp(keyword.trim(), 'i'); // không phân biệt hoa thường
 
     filter.$or = [{ nameVehicles: regex }, { licensePlate: regex }];
-  }
-
-  if (!user) {
-    throw new Error('Người dùng không hợp lệ');
   }
 
   const vehilces = await vehilcesModel

@@ -18,9 +18,9 @@ exports.loginUser = async (req, res) => {
         userName: user.userName,
         email: user.email,
         role: user.role,
-        accessToken,
-        refreshToken,
       },
+      accessToken,
+      refreshToken,
     });
   } catch (err) {
     return res.status(401).json({
