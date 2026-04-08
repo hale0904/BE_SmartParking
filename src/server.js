@@ -4,6 +4,8 @@ const express = require('express');
 const connectDB = require('./app/config/db.config');
 const routes = require('./app/routes/routes');
 
+require('./app/cron/booking.cron');
+
 function createApp() {
   const app = express();
 

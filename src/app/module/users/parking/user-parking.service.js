@@ -16,11 +16,7 @@ const STATUS_SLOT = {
   3: 'Vị trí lỗi/ Vị trí đang chỉnh sửa',
 };
 
-exports.getParkingMap = async (
-  status,
-  expectedArrivalTime,
-  expectedLeaveTime
-) => {
+exports.getParkingMap = async (status) => {
   const filter = {};
 
   // filter theo status
@@ -58,120 +54,9 @@ exports.getParkingMap = async (
         const groups = await GroupSlot.find({ zoneCode: zone._id }).lean();
 
         for (const group of groups) {
+          // ===== SLOT =====
           const slots = await Slot.find({ groupSlotCode: group._id }).lean();
-
-          const arrivalInput = expectedArrivalTime
-            ? new Date(expectedArrivalTime)
-            : null;
-
-          const leaveInput = expectedLeaveTime
-            ? new Date(expectedLeaveTime)
-            : null;
-
-          const validSlots = [];
-          // đầu ngày hôm nay
-          // const startDay = new Date();
-          // startDay.setHours(0, 0, 0, 0);
-
-          // cuối ngày hôm nay
-          // const endDay = new Date();
-          // endDay.setHours(23, 59, 59, 999);
-
-          // +4h từ thời gian user chọn
-          // const plus4Hours = new Date(timeNow.getTime() + 4 * 60 * 60 * 1000);
-
-          for (const slot of slots) {
-            // const timeNow = new Date();
-
-            // const isToday =
-            //   arrivalInput.toDateString() === timeNow.toDateString();
-
-            const bookings = await bookingModel
-              .find({ slotId: slot._id })
-              .lean();
-
-            // =========================
-            // CASE 1: KHÔNG truyền thời gian
-            // =========================
-            const now = new Date();
-
-            // if (
-            //   slot.status === 0 ||
-            //   slot.status === 2 ||
-            //   slot.status === 3 ||
-            //   slot.status === 1
-            // ) {
-            if (!arrivalInput && !leaveInput) {
-              const activeBooking = bookings.find(
-                (b) =>
-                  b.slotId.toString() === slot._id.toString() &&
-                  b.expectedArrivalTime <= now &&
-                  b.expectedLeaveTime >= now
-              );
-
-              if (activeBooking) {
-                validSlots.push({
-                  ...slot,
-                  status: 2,
-                  statusName: STATUS_SLOT[2],
-                });
-              }
-
-              if (!activeBooking && slot.status === 2) {
-                validSlots.push({
-                  ...slot,
-                  status: 0,
-                  statusName: STATUS_SLOT[0],
-                });
-              }
-
-              if (!activeBooking) {
-                validSlots.push({
-                  ...slot,
-                });
-              }
-
-              continue;
-            }
-            // }
-
-            // =========================
-            // CASE 2: CÓ chọn thời gian
-            // =========================
-            if (arrivalInput && leaveInput) {
-              const activeBooking = bookings.find(
-                (b) =>
-                  b.slotId.toString() === slot._id.toString() &&
-                  b.expectedArrivalTime > arrivalInput &&
-                  b.expectedLeaveTime < leaveInput
-              );
-
-              if (activeBooking) {
-                validSlots.push({
-                  ...slot,
-                  status: 2,
-                  statusName: STATUS_SLOT[2],
-                });
-              }
-
-              if (!activeBooking && slot.status !== 3) {
-                validSlots.push({
-                  ...slot,
-                  status: 0,
-                  statusName: STATUS_SLOT[0],
-                });
-              }
-
-              continue;
-            }
-          }
-
-          // if (!expectedArrivalTime) {
-          //   group.slots = bookings;
-          // } else {
-          // FIX QUAN TRỌNG
-          group.slots = validSlots;
-          // }
+          group.slots = slots;
         }
 
         zone.groupSlots = groups;

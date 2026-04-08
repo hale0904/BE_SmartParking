@@ -13,4 +13,10 @@ router.post(
   bookingsController.getListBooking
 );
 
+router.post(
+  '/cancelBooking',
+  authUserMiddleware,
+  bookingsController.cancelBooking
+);
+
 module.exports = router;

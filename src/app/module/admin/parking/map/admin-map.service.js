@@ -88,6 +88,8 @@ exports.getListMap = async (status, keyword) => {
   return result;
 };
 
+const getCodes = (items = []) => items.map((item) => item.code).filter(Boolean);
+
 exports.updateMap = async (payload) => {
   const { code, name, location, status, totalFloors, floors = [] } = payload;
 
@@ -113,9 +115,11 @@ exports.updateMap = async (payload) => {
       totalFloors,
     });
   } else {
-    parking.name = name;
-    parking.location = location;
-    parking.totalFloors = totalFloors;
+    Object.assign(parking, {
+      name,
+      location,
+      totalFloors,
+    });
 
     if (status !== undefined) {
       parking.status = status;
@@ -126,54 +130,35 @@ exports.updateMap = async (payload) => {
   }
 
   // ======================
-  // FLOORS (2 chiều)
+  // FLOOR
   // ======================
-  const dbFloors = await Floor.find({ parkingCode: parking._id });
-  const feFloorCodes = floors.map((f) => f.code);
-
-  // Xoá floor không còn trong FE (phải xoá con trước)
-  for (const dbFloor of dbFloors) {
-    if (!feFloorCodes.includes(dbFloor.code)) {
-      await Slot.deleteMany({ floorCode: dbFloor._id });
-      await GroupSlot.deleteMany({ floorCode: dbFloor._id });
-      await Zone.deleteMany({ floorCode: dbFloor._id });
-      await SlotStandalone.deleteMany({ floorCode: dbFloor._id });
-      await Lane.deleteMany({ floorCode: dbFloor._id });
-      await Exit.deleteMany({ floorCode: dbFloor._id });
-      await Entrance.deleteMany({ floorCode: dbFloor._id });
-      await Floor.deleteOne({ _id: dbFloor._id });
-    }
-  }
-
   for (const f of floors) {
-    let floor = await Floor.findOne({ code: f.code });
+    let floor = await Floor.findOne({
+      code: f.code,
+      parkingCode: parking._id,
+    });
 
     if (!floor) {
       floor = await Floor.create({
-        code: f.code,
-        nameFloor: f.nameFloor,
-        level: f.level,
-        status: f.status,
-        statusName: STATUS_MAP[f.status],
-        boundary: f.boundary,
+        ...f,
         parkingCode: parking._id,
+        statusName: STATUS_MAP[f.status],
       });
     } else {
       Object.assign(floor, {
-        nameFloor: f.nameFloor,
-        level: f.level,
-        status: f.status,
-        statusName: STATUS_MAP[f.status],
-        boundary: f.boundary,
+        ...f,
+        parkingCode: parking._id,
       });
+
+      floor.statusName = STATUS_MAP[f.status];
       await floor.save();
     }
 
     // ======================
-    // ENTRANCE (2 chiều)
+    // ENTRANCE
     // ======================
     const dbEntrances = await Entrance.find({ floorCode: floor._id });
-    const feEntranceCodes = (f.entrances || []).map((e) => e.code);
+    const feEntranceCodes = getCodes(f.entrances);
 
     for (const eDb of dbEntrances) {
       if (!feEntranceCodes.includes(eDb.code)) {
@@ -182,7 +167,10 @@ exports.updateMap = async (payload) => {
     }
 
     for (const e of f.entrances || []) {
-      let entrance = await Entrance.findOne({ code: e.code });
+      let entrance = await Entrance.findOne({
+        code: e.code,
+        floorCode: floor._id,
+      });
 
       if (!entrance) {
         await Entrance.create({
@@ -191,17 +179,21 @@ exports.updateMap = async (payload) => {
           statusName: STATUS_MAP[e.status],
         });
       } else {
-        Object.assign(entrance, e);
+        Object.assign(entrance, {
+          ...e,
+          floorCode: floor._id,
+        });
+
         entrance.statusName = STATUS_MAP[e.status];
         await entrance.save();
       }
     }
 
     // ======================
-    // EXIT (2 chiều)
+    // EXIT
     // ======================
     const dbExits = await Exit.find({ floorCode: floor._id });
-    const feExitCodes = (f.exits || []).map((x) => x.code);
+    const feExitCodes = getCodes(f.exits);
 
     for (const xDb of dbExits) {
       if (!feExitCodes.includes(xDb.code)) {
@@ -210,7 +202,10 @@ exports.updateMap = async (payload) => {
     }
 
     for (const x of f.exits || []) {
-      let exit = await Exit.findOne({ code: x.code });
+      let exit = await Exit.findOne({
+        code: x.code,
+        floorCode: floor._id,
+      });
 
       if (!exit) {
         await Exit.create({
@@ -219,28 +214,33 @@ exports.updateMap = async (payload) => {
           statusName: STATUS_MAP[x.status],
         });
       } else {
-        Object.assign(exit, x);
+        Object.assign(exit, {
+          ...x,
+          floorCode: floor._id,
+        });
+
         exit.statusName = STATUS_MAP[x.status];
         await exit.save();
       }
     }
 
     // ======================
-    // LANENODE (2 chiều)
+    // LANE NODE
     // ======================
     const dbLaneNodes = await laneNodeModel.find({ floorCode: floor._id });
-    const feLaneNodeCodes = (f.laneNodes || []).map((n) => n.code);
+    const feLaneNodeCodes = getCodes(f.laneNodes);
 
-    // xoá
     for (const lnDb of dbLaneNodes) {
       if (!feLaneNodeCodes.includes(lnDb.code)) {
         await laneNodeModel.deleteOne({ _id: lnDb._id });
       }
     }
 
-    // create/update
     for (const n of f.laneNodes || []) {
-      let laneNode = await laneNodeModel.findOne({ code: n.code });
+      let laneNode = await laneNodeModel.findOne({
+        code: n.code,
+        floorCode: floor._id,
+      });
 
       if (!laneNode) {
         await laneNodeModel.create({
@@ -248,13 +248,17 @@ exports.updateMap = async (payload) => {
           floorCode: floor._id,
         });
       } else {
-        Object.assign(laneNode, n);
+        Object.assign(laneNode, {
+          ...n,
+          floorCode: floor._id,
+        });
+
         await laneNode.save();
       }
     }
 
     // ======================
-    // TẠO nodeMap (QUAN TRỌNG)
+    // NODE MAP
     // ======================
     const laneNodes = await laneNodeModel.find({ floorCode: floor._id });
 
@@ -264,19 +268,17 @@ exports.updateMap = async (payload) => {
     }
 
     // ======================
-    // LANE (2 chiều)
+    // LANE
     // ======================
     const dbLanes = await Lane.find({ floorCode: floor._id });
-    const feLaneCodes = (f.lanes || []).map((l) => l.code);
+    const feLaneCodes = getCodes(f.lanes);
 
-    // xoá
     for (const lDb of dbLanes) {
       if (!feLaneCodes.includes(lDb.code)) {
         await Lane.deleteOne({ _id: lDb._id });
       }
     }
 
-    // create/update
     for (const l of f.lanes || []) {
       let lane = await Lane.findOne({
         code: l.code,
@@ -303,19 +305,21 @@ exports.updateMap = async (payload) => {
       } else {
         Object.assign(lane, {
           ...l,
+          floorCode: floor._id,
           fromNodeId,
           toNodeId,
         });
+
         lane.statusName = STATUS_MAP[l.status];
         await lane.save();
       }
     }
 
     // ======================
-    // SLOT STANDALONE (2 chiều)
+    // SLOT STANDALONE
     // ======================
     const dbSS = await SlotStandalone.find({ floorCode: floor._id });
-    const feSSCodes = (f.slotStandalone || []).map((s) => s.code);
+    const feSSCodes = getCodes(f.slotStandalone);
 
     for (const ssDb of dbSS) {
       if (!feSSCodes.includes(ssDb.code)) {
@@ -324,7 +328,10 @@ exports.updateMap = async (payload) => {
     }
 
     for (const ss of f.slotStandalone || []) {
-      let slotStandalone = await SlotStandalone.findOne({ code: ss.code });
+      let slotStandalone = await SlotStandalone.findOne({
+        code: ss.code,
+        floorCode: floor._id,
+      });
 
       if (!slotStandalone) {
         await SlotStandalone.create({
@@ -333,17 +340,21 @@ exports.updateMap = async (payload) => {
           statusName: STATUS_MAP[ss.status],
         });
       } else {
-        Object.assign(slotStandalone, ss);
+        Object.assign(slotStandalone, {
+          ...ss,
+          floorCode: floor._id,
+        });
+
         slotStandalone.statusName = STATUS_MAP[ss.status];
         await slotStandalone.save();
       }
     }
 
     // ======================
-    // ZONES (2 chiều)
+    // ZONE
     // ======================
     const dbZones = await Zone.find({ floorCode: floor._id });
-    const feZoneCodes = (f.zones || []).map((z) => z.code);
+    const feZoneCodes = getCodes(f.zones);
 
     for (const zDb of dbZones) {
       if (!feZoneCodes.includes(zDb.code)) {
@@ -354,7 +365,10 @@ exports.updateMap = async (payload) => {
     }
 
     for (const z of f.zones || []) {
-      let zone = await Zone.findOne({ code: z.code });
+      let zone = await Zone.findOne({
+        code: z.code,
+        floorCode: floor._id,
+      });
 
       if (!zone) {
         zone = await Zone.create({
@@ -363,16 +377,20 @@ exports.updateMap = async (payload) => {
           statusName: STATUS_MAP[z.status],
         });
       } else {
-        Object.assign(zone, z);
+        Object.assign(zone, {
+          ...z,
+          floorCode: floor._id,
+        });
+
         zone.statusName = STATUS_MAP[z.status];
         await zone.save();
       }
 
       // ======================
-      // GROUP SLOT (2 chiều)
+      // GROUP SLOT
       // ======================
       const dbGroups = await GroupSlot.find({ zoneCode: zone._id });
-      const feGroupCodes = (z.groupSlots || []).map((g) => g.code);
+      const feGroupCodes = getCodes(z.groupSlots);
 
       for (const gDb of dbGroups) {
         if (!feGroupCodes.includes(gDb.code)) {
@@ -382,25 +400,34 @@ exports.updateMap = async (payload) => {
       }
 
       for (const g of z.groupSlots || []) {
-        let group = await GroupSlot.findOne({ code: g.code });
+        let group = await GroupSlot.findOne({
+          code: g.code,
+          zoneCode: zone._id,
+        });
 
         if (!group) {
           group = await GroupSlot.create({
             ...g,
             zoneCode: zone._id,
+            floorCode: floor._id,
             statusName: STATUS_MAP[g.status],
           });
         } else {
-          Object.assign(group, g);
+          Object.assign(group, {
+            ...g,
+            zoneCode: zone._id,
+            floorCode: floor._id,
+          });
+
           group.statusName = STATUS_MAP[g.status];
           await group.save();
         }
 
         // ======================
-        // SLOT (2 chiều)
+        // SLOT
         // ======================
         const dbSlots = await Slot.find({ groupSlotCode: group._id });
-        const feSlotCodes = (g.slots || []).map((s) => s.code);
+        const feSlotCodes = getCodes(g.slots);
 
         for (const sDb of dbSlots) {
           if (!feSlotCodes.includes(sDb.code)) {
@@ -409,16 +436,27 @@ exports.updateMap = async (payload) => {
         }
 
         for (const s of g.slots || []) {
-          let slot = await Slot.findOne({ code: s.code });
+          let slot = await Slot.findOne({
+            code: s.code,
+            groupSlotCode: group._id,
+          });
 
           if (!slot) {
-            await Slot.create({
+            slot = await Slot.create({
               ...s,
               groupSlotCode: group._id,
+              zoneCode: zone._id,
+              floorCode: floor._id,
               statusName: STATUS_SLOT[s.status],
             });
           } else {
-            Object.assign(slot, s);
+            Object.assign(slot, {
+              ...s,
+              groupSlotCode: group._id,
+              zoneCode: zone._id,
+              floorCode: floor._id,
+            });
+
             slot.statusName = STATUS_SLOT[s.status];
             await slot.save();
           }

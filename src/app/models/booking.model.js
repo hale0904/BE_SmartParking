@@ -17,7 +17,7 @@ const BookingSchema = new mongoose.Schema(
     slotId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Slot',
-      required: true,
+      // required: true,
     },
     vehiclesId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -28,16 +28,16 @@ const BookingSchema = new mongoose.Schema(
       type: Date,
       required: true,
     },
-    expectedLeaveTime: {
-      type: Date,
-      required: true,
-      validate: {
-        validator: function (value) {
-          return value > this.expectedArrivalTime;
-        },
-        message: 'Giờ rời phải lớn hơn giờ đến',
-      },
-    },
+    // expectedLeaveTime: {
+    //   type: Date,
+    //   required: true,
+    //   validate: {
+    //     validator: function (value) {
+    //       return value > this.expectedArrivalTime;
+    //     },
+    //     message: 'Giờ rời phải lớn hơn giờ đến',
+    //   },
+    // },
     status: {
       type: Number,
       required: true,

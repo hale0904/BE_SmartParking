@@ -38,3 +38,22 @@ exports.bookingSlot = async (req, res) => {
     });
   }
 };
+
+exports.cancelBooking = async (req, res) => {
+  try {
+    const { bookingCode, userCode } = req.body;
+
+    const result = await bookingsService.cancelBooking(bookingCode, userCode);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Hủy đặt chỗ thành công',
+      data: result,
+    });
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
