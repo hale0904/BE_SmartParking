@@ -1,28 +1,30 @@
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
 
 const sensorSchema = new mongoose.Schema({
+  code: {
+    type: String,
+    required: true,
+    unique: true,
+    trim: true,
+    default: '0',
+  },
 
-    sensorId: {
-        type: Number,
-        required: true,
-        unique: true
-    },
+  slotId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Slot',
+    default: null,
+    // required: true,
+  },
 
-    status: {
-        type: Number, // 0 = empty , 1 = occupied
-        default: 0
-    },
+  isActive: {
+    type: Number, // 0 = empty , 1 = occupied
+    default: 0,
+  },
 
-    isOnline: {
-        type: Boolean,
-        default: false
-    },
-
-    lastSeen: {
-        type: Date,
-        default: Date.now
-    }
-
+  isOnline: {
+    type: Boolean,
+    default: false,
+  },
 });
 
-module.exports = mongoose.model("Sensor", sensorSchema);
+module.exports = mongoose.model('Sensor', sensorSchema);

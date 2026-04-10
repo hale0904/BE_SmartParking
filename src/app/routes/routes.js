@@ -12,6 +12,7 @@ const sensorRouter = require('../module/c-iot/sensor/sensor.route');
 const vehiclesRoutes = require('../module/users/vehicles/vehicles.route');
 const bookingRoutes = require('../module/users/booking/booking.route');
 const statisticalRoute = require('../module/admin/statistical/statistical.route');
+const sensorAdminRoute = require('../module/admin/sensor/sensor.route');
 
 const router = express.Router();
 
@@ -24,6 +25,7 @@ router.use('/api/ad', [
   zoneAdminRoutes,
   mapAdminRoutes,
   statisticalRoute,
+  sensorAdminRoute,
 ]);
 
 router.use('/api', [sensorRouter]);

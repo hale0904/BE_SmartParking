@@ -8,6 +8,7 @@ const Exit = require('../../../../models/exit.model');
 const Lane = require('../../../../models/lane.model');
 const SlotStandalone = require('../../../../models/standaloneSlot.model');
 const laneNodeModel = require('../../../../models/laneNode.model');
+const sensorModel = require('../../../../models/sensor.model');
 
 const STATUS_MAP = {
   0: 'Đang chỉnh sửa',
@@ -429,18 +430,43 @@ exports.updateMap = async (payload) => {
         const dbSlots = await Slot.find({ groupSlotCode: group._id });
         const feSlotCodes = getCodes(g.slots);
 
+        // DELETE SLOT KHÔNG CÒN
         for (const sDb of dbSlots) {
           if (!feSlotCodes.includes(sDb.code)) {
+            if (sDb.sensorId) {
+              await sensorModel.updateOne(
+                { _id: sDb.sensorId },
+                { $set: { slotId: null } }
+              );
+            }
+
             await Slot.deleteOne({ _id: sDb._id });
           }
         }
 
+        // UPSERT SLOT
         for (const s of g.slots || []) {
+          let sensor = null;
+
+          // ======================
+          // FIND SENSOR BY CODE
+          // ======================
+          if (s.sensorCode) {
+            sensor = await sensorModel.findOne({ code: s.sensorCode });
+
+            if (!sensor) {
+              throw new Error(`Sensor ${s.sensorCode} không tồn tại`);
+            }
+          }
+
           let slot = await Slot.findOne({
             code: s.code,
             groupSlotCode: group._id,
           });
 
+          // ======================
+          // CREATE SLOT
+          // ======================
           if (!slot) {
             slot = await Slot.create({
               ...s,
@@ -448,17 +474,37 @@ exports.updateMap = async (payload) => {
               zoneCode: zone._id,
               floorCode: floor._id,
               statusName: STATUS_SLOT[s.status],
+              sensorId: sensor ? sensor._id : null,
             });
-          } else {
+          }
+          // ======================
+          // UPDATE SLOT
+          // ======================
+          else {
             Object.assign(slot, {
               ...s,
               groupSlotCode: group._id,
               zoneCode: zone._id,
               floorCode: floor._id,
+              statusName: STATUS_SLOT[s.status],
+              sensorId: sensor ? sensor._id : null,
             });
 
-            slot.statusName = STATUS_SLOT[s.status];
             await slot.save();
+          }
+
+          // ======================
+          // SYNC SENSOR ↔ SLOT
+          // ======================
+          if (sensor) {
+            // đảm bảo 1 sensor không bị gắn nhiều slot
+            await sensorModel.updateMany(
+              { slotId: slot._id, _id: { $ne: sensor._id } },
+              { $set: { slotId: null } }
+            );
+
+            sensor.slotId = slot._id;
+            await sensor.save();
           }
         }
       }
