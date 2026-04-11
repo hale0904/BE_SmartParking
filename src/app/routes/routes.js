@@ -13,6 +13,8 @@ const vehiclesRoutes = require('../module/users/vehicles/vehicles.route');
 const bookingRoutes = require('../module/users/booking/booking.route');
 const statisticalRoute = require('../module/admin/statistical/statistical.route');
 const sensorAdminRoute = require('../module/admin/sensor/sensor.route');
+const paymentRoute = require('../module/users/payment/payment.route');
+const walletRoute = require('../module/users/wallet/wallet.route');
 
 const router = express.Router();
 
@@ -36,6 +38,8 @@ router.use('/api/us', [
   parkingUserRoutes,
   vehiclesRoutes,
   bookingRoutes,
+  paymentRoute,
+  walletRoute,
 ]);
 
 module.exports = router;
