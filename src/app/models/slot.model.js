@@ -38,19 +38,19 @@ const SlotParkingSchema = new mongoose.Schema(
       ref: 'Sensor',
       default: null,
     },
-    isSensorReal: {
-      type: Boolean,
-      // required: true,
-      default: true,
-    },
-    isActive: {
-      type: Boolean,
-      // required: true,
-      default: true,
-    },
-    sensorStatus: {
-      type: Boolean,
-    },
+    // isSensorReal: {
+    //   type: Boolean,
+    //   // required: true,
+    //   default: true,
+    // },
+    // isActive: {
+    //   type: Boolean,
+    //   // required: true,
+    //   default: true,
+    // },
+    // sensorStatus: {
+    //   type: Boolean,
+    // },
   },
   { timestamps: true }
 );

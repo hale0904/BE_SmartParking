@@ -25,6 +25,12 @@ const sensorSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+
+  categoryId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'CategoryIot',
+    default: null,
+  },
 });
 
 module.exports = mongoose.model('Sensor', sensorSchema);

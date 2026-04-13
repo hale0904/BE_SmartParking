@@ -41,3 +41,22 @@ exports.updateSensor = async (req, res) => {
     });
   }
 };
+
+exports.deleteSensor = async (req, res) => {
+  try {
+    const { items } = req.body; // DTO[]
+
+    const result = await sensorService.deleteSensor(items);
+
+    return res.status(200).json({
+      success: true,
+      message: `Xóa thành công ${result.deletedCount} sensor`,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};

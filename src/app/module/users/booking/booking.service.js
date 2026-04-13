@@ -265,6 +265,42 @@ exports.autoAssignSlotForUpcomingBookings = async () => {
   return true;
 };
 
+exports.releaseUncheckinBookings = async () => {
+  const now = new Date();
+
+  const expiredBookings = await bookingModel.find({
+    status: 1, // đã được gán slot
+    slotId: { $ne: null },
+    expectedArrivalTime: {
+      $lte: new Date(now.getTime() - 15 * 60 * 1000), // quá 15p
+    },
+  });
+
+  for (const booking of expiredBookings) {
+    const slot = await slotModel.findById(booking.slotId);
+
+    // chỉ xử lý nếu slot vẫn chưa có xe
+    if (slot && slot.status !== 1) {
+      // 1. trả slot về trống
+      await slotModel.findByIdAndUpdate(slot._id, {
+        status: 0,
+        statusName: STATUS_SLOT[0],
+        reservedAt: null,
+      });
+
+      // 2. hủy booking
+      await bookingModel.findByIdAndUpdate(booking._id, {
+        status: 0,
+        statusName: STATUS_BOOKING[0],
+        cancelReason: 'Không check-in sau 15 phút',
+        cancelledAt: new Date(),
+      });
+    }
+  }
+
+  return true;
+};
+
 exports.cancelBooking = async (bookingCode, userCode) => {
   if (!bookingCode || !userCode) {
     throw new Error('Thiếu thông tin booking hoặc user');
