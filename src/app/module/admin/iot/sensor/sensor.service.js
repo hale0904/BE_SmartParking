@@ -162,7 +162,7 @@ exports.syncSensorStateService = async () => {
     // SENSOR ON
     // ======================
     if (sensor.isActive === 1) {
-      if (slot.status !== 1 && slot.status === 2) {
+      if (slot.status !== 1) {
         slot.status = 1;
         slot.statusName = STATUS_SLOT[1];
       }
