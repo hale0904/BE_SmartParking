@@ -6,7 +6,7 @@ cron.schedule('* * * * *', async () => {
   try {
     await bookingService.autoAssignSlotForUpcomingBookings();
     await bookingService.releaseUncheckinBookings();
-    await sensorService.syncSensorStateService();
+    // await sensorService.syncSensorStateService();
     console.log('Auto assign slot success');
   } catch (error) {
     console.error('Auto assign slot error:', error.message);

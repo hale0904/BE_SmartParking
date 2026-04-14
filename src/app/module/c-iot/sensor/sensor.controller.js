@@ -1,29 +1,28 @@
 const sensorService = require('./sensor.service');
 
-exports.updateSensor = async (req, res) => {
+const updateSensor = async (req, res) => {
   try {
+    const { code, isActive } = req.body;
 
-    const payload = {
-      ...req.body,
-      adminCode: req.admin?.code
-    };
+    if (!code || isActive === undefined) {
+      return res.status(400).json({
+        message: 'Missing code or isActive',
+      });
+    }
 
-    const result = await sensorService.updateSensor(payload);
+    const result = await sensorService.updateSensorStatus(code, isActive);
 
-    return res.status(200).json({
-      success: true,
-      message: 'Cập nhật sensor thành công',
-      data: result.data
+    res.status(200).json({
+      message: 'Update success',
+      data: result,
     });
-
   } catch (error) {
-
-    console.error(error);
-
-    return res.status(400).json({
-      success: false,
-      message: error.message
+    res.status(500).json({
+      message: error.message,
     });
-
   }
+};
+
+module.exports = {
+  updateSensor,
 };

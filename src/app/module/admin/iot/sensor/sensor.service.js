@@ -147,53 +147,92 @@ exports.deleteSensor = async (items = []) => {
   };
 };
 
-exports.syncSensorStateService = async () => {
-  const sensors = await sensorModel.find({});
+// exports.syncSensorStateService = async () => {
+//   const sensors = await sensorModel.find({});
 
-  for (const sensor of sensors) {
-    const slot = await slotModel.findById(sensor.slotId);
-    if (!slot) continue;
+//   for (const sensor of sensors) {
+//     const slot = await slotModel.findById(sensor.slotId);
+//     if (!slot) continue;
 
-    const booking = await bookingModel.findOne({
-      slotId: slot._id,
-      status: { $in: [1, 2] },
-    });
+//     const booking = await bookingModel.findOne({
+//       slotId: slot._id,
+//       status: { $in: [1, 2] },
+//     });
 
-    // ======================
-    // SENSOR ON
-    // ======================
-    if (sensor.isActive === 1) {
-      if (slot.status !== 1) {
-        slot.status = 1;
-        slot.statusName = STATUS_SLOT[1];
-      }
+//     // ======================
+//     // SENSOR ON
+//     // ======================
+//     if (sensor.isActive === 1) {
+//       if (slot.status !== 1) {
+//         slot.status = 1;
+//         slot.statusName = STATUS_SLOT[1];
+//       }
 
-      if (booking && booking.status === 1) {
-        booking.status = 1; // giữ nguyên
-        booking.statusName = STATUS_BOOKING[1];
-      }
+//       if (booking && booking.status === 1) {
+//         booking.status = 1; // giữ nguyên
+//         booking.statusName = STATUS_BOOKING[1];
+//       }
 
-      await Promise.all([slot.save(), booking ? booking.save() : null]);
+//       await Promise.all([slot.save(), booking ? booking.save() : null]);
 
-      continue;
+//       continue;
+//     }
+
+//     // ======================
+//     // SENSOR OFF
+//     // ======================
+//     if (sensor.isActive === 0 && slot.status === 1) {
+//       slot.status = 0;
+//       slot.statusName = STATUS_SLOT[0];
+
+//       if (booking && booking.status === 1) {
+//         booking.status = 3;
+//         booking.statusName = STATUS_BOOKING[3];
+//         booking.completedAt = new Date();
+//       }
+
+//       await Promise.all([slot.save(), booking ? booking.save() : null]);
+//     }
+//   }
+
+//   return true;
+// };
+
+exports.handleSensorChange = async (sensor) => {
+  const slot = await slotModel.findById(sensor.slotId);
+  if (!slot) return;
+
+  const booking = await bookingModel.findOne({
+    slotId: slot._id,
+    status: { $in: [1, 2] },
+  });
+
+  // SENSOR ON
+  if (sensor.isActive === 1) {
+    if (slot.status !== 1) {
+      slot.status = 1;
+      slot.statusName = STATUS_SLOT[1];
     }
 
-    // ======================
-    // SENSOR OFF
-    // ======================
-    if (sensor.isActive === 0 && slot.status === 1) {
-      slot.status = 0;
-      slot.statusName = STATUS_SLOT[0];
-
-      if (booking && booking.status === 1) {
-        booking.status = 3;
-        booking.statusName = STATUS_BOOKING[3];
-        booking.completedAt = new Date();
-      }
-
-      await Promise.all([slot.save(), booking ? booking.save() : null]);
+    if (booking && booking.status === 1) {
+      booking.statusName = STATUS_BOOKING[1];
     }
+
+    await Promise.all([slot.save(), booking ? booking.save() : null]);
+    return;
   }
 
-  return true;
+  // SENSOR OFF
+  if (sensor.isActive === 0 && slot.status === 1) {
+    slot.status = 0;
+    slot.statusName = STATUS_SLOT[0];
+
+    if (booking && booking.status === 1) {
+      booking.status = 3;
+      booking.statusName = STATUS_BOOKING[3];
+      booking.completedAt = new Date();
+    }
+
+    await Promise.all([slot.save(), booking ? booking.save() : null]);
+  }
 };

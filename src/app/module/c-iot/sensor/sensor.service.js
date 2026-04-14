@@ -1,36 +1,27 @@
-const Slot = require('../../../models/slot.model');
+const Sensor = require('../../../models/sensor.model');
+const sensorService = require('../../admin/iot/sensor/sensor.service');
 
-exports.updateSensor = async (payload) => {
+const updateSensorStatus = async (code, isActive) => {
   try {
-    const { nameSlot, sensorId, sensorStatus } = payload;
-
-    const status = sensorStatus ? 2 : 0;
-
-    const slot = await Slot.findOneAndUpdate(
-      { nameSlot: nameSlot },
-      {
-        $set: {
-          sensorId: sensorId,
-          sensorStatus: sensorStatus,
-          status: status,
-        },
-      },
+    const updated = await Sensor.findOneAndUpdate(
+      { code: code },
+      { $set: { isActive: isActive } },
       { new: true }
     );
 
-    if (global.io) {
-      global.io.emit('slot:update', {
-        slotId: slot._id,
-        nameSlot: slot.nameSlot,
-        sensorStatus: slot.sensorStatus,
-        status: slot.status,
-      });
+    if (!updated) {
+      throw new Error('Sensor not found');
     }
 
-    return {
-      data: slot,
-    };
+    // FIX Ở ĐÂY
+    await sensorService.handleSensorChange(updated);
+
+    return updated;
   } catch (error) {
     throw error;
   }
+};
+
+module.exports = {
+  updateSensorStatus,
 };
