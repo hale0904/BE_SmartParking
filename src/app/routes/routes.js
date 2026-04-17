@@ -16,7 +16,7 @@ const sensorAdminRoute = require('../module/admin/iot/sensor/sensor.route');
 const paymentRoute = require('../module/users/payment/payment.route');
 const walletRoute = require('../module/users/wallet/wallet.route');
 const categoryIotRoute = require('../module/admin/iot/categoryIot/categoryIot.route');
-
+const accountUserRoute = require('../module/admin/accountUser/accountUser.route');
 const router = express.Router();
 
 // Admin
@@ -30,6 +30,7 @@ router.use('/api/ad', [
   statisticalRoute,
   sensorAdminRoute,
   categoryIotRoute,
+  accountUserRoute,
 ]);
 
 router.use('/api', [sensorRouter]);
