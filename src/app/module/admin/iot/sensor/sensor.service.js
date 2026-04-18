@@ -30,7 +30,8 @@ exports.getListSensor = async (keyword) => {
   const sensor = await sensorModel
     .find(filter)
     .select('code slotId isActive isOnline categoryId')
-    .populate('categoryId', 'code name');
+    .populate('categoryId', 'code name')
+    .populate('slotId', 'code nameSlot');
 
   return sensor;
 };

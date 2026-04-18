@@ -8,7 +8,7 @@ const router = express.Router();
 
 router.post(
   '/getParkingMap',
-  authUserMiddleware,
+  // authUserMiddleware,
   parkingController.getParkingMap
 );
 
