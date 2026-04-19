@@ -17,6 +17,7 @@ const paymentRoute = require('../module/users/payment/payment.route');
 const walletRoute = require('../module/users/wallet/wallet.route');
 const categoryIotRoute = require('../module/admin/iot/categoryIot/categoryIot.route');
 const accountUserRoute = require('../module/admin/accountUser/accountUser.route');
+const infoAccountRoute = require('../module/users/infoAccount/infoAccount.route');
 const router = express.Router();
 
 // Admin
@@ -43,6 +44,7 @@ router.use('/api/us', [
   bookingRoutes,
   paymentRoute,
   walletRoute,
+  infoAccountRoute,
 ]);
 
 module.exports = router;
