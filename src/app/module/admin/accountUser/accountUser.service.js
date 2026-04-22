@@ -1,4 +1,5 @@
 const userModel = require('../../../models/user.model');
+const vehiclesModel = require('../../../models/vehicles.model');
 
 exports.getListAccountUser = async (keyword) => {
   const filter = {};
@@ -9,8 +10,19 @@ exports.getListAccountUser = async (keyword) => {
     filter.$or = [{ code: regex }];
   }
 
-  const accountUser = await userModel
+  const users = await userModel
     .find(filter)
-    .select('code userName email phone createdAt role');
-  return accountUser;
+    .select('code userName email phone createdAt');
+
+  const result = await Promise.all(
+    users.map(async (user) => {
+      const vehicles = await vehiclesModel.find({ userId: user._id });
+
+      return {
+        ...user.toObject(),
+        vehicles,
+      };
+    })
+  );
+  return result;
 };
