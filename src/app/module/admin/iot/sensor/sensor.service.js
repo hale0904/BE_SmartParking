@@ -38,7 +38,7 @@ exports.getListSensor = async (keyword) => {
 
 // Create or Update vehilces
 exports.updateSensor = async (payload) => {
-  const { code, categoryCode } = payload;
+  const { code, categoryCode, isOnline } = payload;
 
   // ======================
   // CREATE
@@ -47,6 +47,10 @@ exports.updateSensor = async (payload) => {
     const category = await categoryIotModel.findOne({ code: categoryCode });
     if (!category) {
       throw new Error('Loại thiết bị không tồn tại');
+    }
+
+    if (isOnline === null || isOnline === undefined) {
+      throw new Error('Trạng thái online không hợp lệ');
     }
 
     const lastItem = await sensorModel
@@ -67,7 +71,7 @@ exports.updateSensor = async (payload) => {
       code: newCode,
       slotId: null,
       isActive: 0,
-      isOnline: false,
+      isOnline: isOnline,
       categoryId: category._id,
     });
 
@@ -83,6 +87,11 @@ exports.updateSensor = async (payload) => {
     const category = await categoryIotModel.findOne({ code: categoryCode });
     if (!category) throw new Error('Loại thiết bị không tồn tại');
     sensors.categoryId = category._id;
+  }
+  if (isOnline === null || isOnline === undefined) {
+    throw new Error('Trạng thái online không hợp lệ');
+  } else {
+    sensors.isOnline = isOnline;
   }
 
   await sensors.save();
