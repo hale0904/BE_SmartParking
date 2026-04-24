@@ -1,7 +1,7 @@
 // services/licensePlate.service.js
 const licensePlateModel = require('../../../models/licensePlate.model');
 const cameraModel = require('../../../models/iotCamera.model');
-const parkingSessionService = require('../../users/parkingSession/parkingSession.service');
+const parkingSessionService = require('../../users/parkingSessions/parkingSessions.service');
 
 exports.scanLicensePlate = async (payload) => {
   const { code, cameraId, plateNumber, capturedAt } = payload;

@@ -54,6 +54,28 @@ const parkingSessionSchema = new mongoose.Schema({
     ref: 'LicensePlate',
     default: null,
   },
+
+  walletId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Wallet',
+    default: null,
+  },
+
+  statusPayment: {
+    type: Number, // 0 = unpaid, 1 = paid
+    default: 0,
+  },
+
+  statusPaymentName: {
+    type: String,
+    default: '',
+  },
+
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null,
+  },
 });
 
 module.exports = mongoose.model('ParkingSession', parkingSessionSchema);

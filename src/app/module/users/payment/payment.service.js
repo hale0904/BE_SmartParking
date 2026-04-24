@@ -3,49 +3,75 @@ const Transaction = require('../../../models/transaction.model');
 const QRPayment = require('../../../models/qrPayment');
 const walletService = require('../../users/wallet/wallet.service'); // thêm
 const userModel = require('../../../models/user.model');
+const parkingSessionModel = require('../../../models/parkingSession.model');
 
 const BANK_CODE = '970422';
 const ACCOUNT_NUMBER = '2702868679';
 const ACCOUNT_NAME = 'NGUYEN VAN A';
 
+const buildQR = (paymentCode, amount) => {
+  return `https://img.vietqr.io/image/${BANK_CODE}-${ACCOUNT_NUMBER}-compact2.png?amount=${amount}&addInfo=${paymentCode}&accountName=${encodeURIComponent(ACCOUNT_NAME)}`;
+};
+
 // TẠO QR NẠP TIỀN
 exports.createTopupQR = async ({ userId, amount }) => {
   const user = await userModel.findOne({ code: userId });
-  if (!user) {
-    throw new Error('Thiếu mã người dùng');
-  }
+  if (!user) throw new Error('Không tìm thấy user');
 
-  const paymentCode = 'NAP_' + uuidv4().slice(0, 8); // đổi prefix
+  const paymentCode = 'NAP_' + uuidv4().slice(0, 8);
 
-  // 1. tạo transaction TOPUP
   const transaction = await Transaction.create({
     code: paymentCode,
-    userId: user,
-    type: 'TOPUP', // quan trọng
+    userId: user._id,
+    type: 'TOPUP',
     amount,
     paymentMethod: 'QR',
     paymentCode,
     status: 'PENDING',
   });
 
-  // 2. tạo QR
-  const qrUrl = `https://img.vietqr.io/image/${BANK_CODE}-${ACCOUNT_NUMBER}-compact2.png?amount=${amount}&addInfo=${paymentCode}&accountName=${encodeURIComponent(ACCOUNT_NAME)}`;
+  const qrUrl = buildQR(paymentCode, amount);
 
-  // 3. lưu QRPayment
   const qrPayment = await QRPayment.create({
     transactionId: transaction._id,
     qrUrl,
     amount,
     content: paymentCode,
-    bankCode: BANK_CODE,
-    accountNumber: ACCOUNT_NUMBER,
     expireAt: new Date(Date.now() + 15 * 60 * 1000),
   });
 
-  return {
-    transaction,
-    qrPayment,
-  };
+  return { transaction, qrPayment };
+};
+
+// TẠO QR THANH TOÁN PARKING
+exports.createParkingQR = async ({ userId, amount, sessionId }) => {
+  const user = await userModel.findById(userId);
+  if (!user) throw new Error('Không tìm thấy user');
+
+  const paymentCode = 'PARK_' + uuidv4().slice(0, 8);
+
+  const transaction = await Transaction.create({
+    code: paymentCode,
+    userId: user._id,
+    type: 'PARKING',
+    amount,
+    paymentMethod: 'QR',
+    paymentCode,
+    status: 'PENDING',
+    parkingSessionId: sessionId,
+  });
+
+  const qrUrl = buildQR(paymentCode, amount);
+
+  const qrPayment = await QRPayment.create({
+    transactionId: transaction._id,
+    qrUrl,
+    amount,
+    content: paymentCode,
+    expireAt: new Date(Date.now() + 15 * 60 * 1000),
+  });
+
+  return { transaction, qrPayment };
 };
 
 exports.handleWebhook = async ({ amount, content }) => {
@@ -79,4 +105,53 @@ exports.handleWebhook = async ({ amount, content }) => {
   }
 
   return transaction;
+};
+
+exports.handleParkingWebhook = async ({ amount, content }) => {
+  const transaction = await Transaction.findOne({ paymentCode: content });
+
+  if (!transaction || transaction.type !== 'PARKING') return null;
+
+  if (Number(transaction.amount) !== Number(amount)) return null;
+
+  const isPaid = transaction.status === 'PAID';
+
+  // update transaction
+  if (!isPaid) {
+    transaction.status = 'PAID';
+    await transaction.save();
+
+    await QRPayment.updateMany(
+      { transactionId: transaction._id },
+      { status: 'PAID' }
+    );
+  }
+
+  // update parking session
+  const session = await parkingSessionModel.findById(
+    transaction.parkingSessionId
+  );
+
+  if (!session) {
+    throw new Error('Không tìm thấy parking session');
+  }
+
+  if (session.statusPayment !== 1) {
+    session.status = 1;
+    session.statusName = 'COMPLETED';
+
+    session.statusPayment = 1;
+    session.statusPaymentName = 'PAID';
+
+    if (!session.checkOutTime) {
+      session.checkOutTime = new Date();
+    }
+
+    await session.save();
+  }
+
+  return {
+    message: 'Thanh toán parking thành công',
+    session,
+  };
 };

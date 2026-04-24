@@ -20,7 +20,7 @@ const transactionSchema = new mongoose.Schema(
     //   default: null,
     // },
 
-    type: { type: String, enum: ['TOPUP', 'PAYMENT'], required: true },
+    type: { type: String, enum: ['TOPUP', 'PARKING'], required: true },
     amount: { type: Number, required: true },
 
     paymentMethod: {
@@ -34,6 +34,12 @@ const transactionSchema = new mongoose.Schema(
       type: String,
       enum: ['PENDING', 'PAID', 'FAILED', 'CANCELLED'],
       default: 'PENDING',
+    },
+
+    parkingSessionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'ParkingSession',
+      default: null,
     },
   },
   { timestamps: true }

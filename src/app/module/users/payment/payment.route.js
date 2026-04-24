@@ -7,5 +7,6 @@ router.post('/create-qr', controller.createQR);
 
 // webhook
 router.post('/webhook', controller.webhook);
+router.post('/webhook-parking', controller.handleParkingWebhook);
 
 module.exports = router;

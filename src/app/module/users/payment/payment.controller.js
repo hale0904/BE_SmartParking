@@ -32,3 +32,16 @@ exports.webhook = async (req, res) => {
     res.sendStatus(500);
   }
 };
+
+exports.handleParkingWebhook = async (req, res) => {
+  try {
+    const result = await paymentService.handleParkingWebhook(req.body);
+    res.json(result);
+  } catch (err) {
+    console.error('❌ WEBHOOK PARKING ERROR:', err);
+    res.status(500).json({
+      message: err.message,
+      stack: err.stack, // debug
+    });
+  }
+};
