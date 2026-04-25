@@ -2,6 +2,7 @@ const bookingModel = require('../../../models/booking.model');
 const groupSlotModel = require('../../../models/groupSlot.model');
 const slotModel = require('../../../models/slot.model');
 const zoneModel = require('../../../models/zone.model');
+const parkingSessionModel = require('../../../models/parkingSession.model');
 
 exports.getStatistical = async (
   expectedArrivalTime,
@@ -97,4 +98,81 @@ exports.getStatistical = async (
   }
 
   return result;
+};
+
+exports.getRevenue = async ({ type, startDate, endDate }) => {
+  let start, end;
+
+  const now = new Date();
+
+  if (type === 'day') {
+    start = new Date(now.setHours(0, 0, 0, 0));
+    end = new Date(now.setHours(23, 59, 59, 999));
+  }
+
+  if (type === 'month') {
+    start = new Date(now.getFullYear(), now.getMonth(), 1);
+    end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+  }
+
+  if (type === 'custom') {
+    start = new Date(startDate);
+    end = new Date(endDate);
+  }
+
+  const result = await parkingSessionModel.aggregate([
+    {
+      $match: {
+        status: 1,
+        statusPayment: 1,
+        checkOutTime: { $gte: start, $lte: end },
+      },
+    },
+    {
+      $group: {
+        _id: null,
+        totalRevenue: { $sum: '$price' },
+        totalSessions: { $sum: 1 },
+      },
+    },
+  ]);
+
+  return result[0] || { totalRevenue: 0, totalSessions: 0 };
+};
+
+// =======================
+// TURNOVER
+// =======================
+exports.getTurnover = async ({ startDate, endDate, zoneIds }) => {
+  const match = {
+    status: 1,
+    checkOutTime: {
+      $gte: new Date(startDate),
+      $lte: new Date(endDate),
+    },
+  };
+
+  if (zoneIds?.length) {
+    const zones = await zoneModel.find({ _id: { $in: zoneIds } });
+    const groups = await groupSlotModel.find({
+      zoneCode: { $in: zones.map((z) => z._id) },
+    });
+    const slots = await slotModel.find({
+      groupSlotCode: { $in: groups.map((g) => g._id) },
+    });
+
+    match.slotId = { $in: slots.map((s) => s._id) };
+  }
+
+  const totalSessions = await parkingSessionModel.countDocuments(match);
+
+  const totalSlots = await slotModel.countDocuments({
+    status: { $ne: 3 },
+  });
+
+  return {
+    totalSessions,
+    totalSlots,
+    turnover: totalSlots ? totalSessions / totalSlots : 0,
+  };
 };

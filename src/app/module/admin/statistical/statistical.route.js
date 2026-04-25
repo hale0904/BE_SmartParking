@@ -12,4 +12,12 @@ router.post(
   statisticalController.getStatistical
 );
 
+router.post('/revenue', authAdminMiddleware, statisticalController.getRevenue);
+
+router.post(
+  '/turnover',
+  authAdminMiddleware,
+  statisticalController.getTurnover
+);
+
 module.exports = router;
