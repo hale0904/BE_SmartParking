@@ -67,3 +67,54 @@ exports.getTurnover = async (req, res) => {
     });
   }
 };
+
+// Xuất file
+exports.exportReport = async (req, res) => {
+  try {
+    const { expectedArrivalTime, expectedLeaveTime, zoneIds, format } =
+      req.body;
+
+    const result = await statisticsService.exportReport({
+      expectedArrivalTime,
+      expectedLeaveTime,
+      zoneIds,
+      format,
+    });
+
+    // =======================
+    // CSV
+    // =======================
+    if (result.type === 'csv') {
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename=report.csv');
+
+      return res.send(result.content);
+    }
+
+    // =======================
+    // PDF
+    // =======================
+    if (result.type === 'pdf') {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'attachment; filename=report.pdf');
+
+      return res.send(result.content);
+    }
+  } catch (error) {
+    // E1
+    if (error.code === 'EMPTY_DATA') {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Không có dữ liệu cho các bộ lọc đã chọn. Quá trình xuất bị hủy bỏ.',
+      });
+    }
+
+    // E2
+    return res.status(500).json({
+      success: false,
+      message:
+        'Không có dữ liệu cho các bộ lọc đã chọn. Quá trình xuất bị hủy bỏ.',
+    });
+  }
+};

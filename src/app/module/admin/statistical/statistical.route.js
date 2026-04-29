@@ -20,4 +20,6 @@ router.post(
   statisticalController.getTurnover
 );
 
+router.post('/export', statisticalController.exportReport);
+
 module.exports = router;

@@ -4,10 +4,13 @@ const slotModel = require('../../../models/slot.model');
 const zoneModel = require('../../../models/zone.model');
 const parkingSessionModel = require('../../../models/parkingSession.model');
 
+const PDFDocument = require('pdfkit');
+const { Parser } = require('json2csv');
+
 exports.getStatistical = async (
   expectedArrivalTime,
   expectedLeaveTime,
-  zoneIds // thêm param này
+  zoneIds
 ) => {
   const arrivalInput = expectedArrivalTime
     ? new Date(expectedArrivalTime)
@@ -26,7 +29,7 @@ exports.getStatistical = async (
   // ===== filter zone =====
   const zoneFilter = { status: 1 };
 
-  // ❗ CHỈ filter khi có phần tử
+  // CHỈ filter khi có phần tử
   if (Array.isArray(zoneIds) && zoneIds.length > 0) {
     zoneFilter._id = { $in: zoneIds };
   }
@@ -88,7 +91,7 @@ exports.getStatistical = async (
 
     result.push({
       zoneId: zone._id,
-      zoneName: zone.name,
+      zoneCode: zone.code,
       totalSlots: total,
       empty: totalEmpty,
       used: totalUsed,
@@ -175,4 +178,85 @@ exports.getTurnover = async ({ startDate, endDate, zoneIds }) => {
     totalSlots,
     turnover: totalSlots ? totalSessions / totalSlots : 0,
   };
+};
+
+// EXPORT REPORT
+exports.exportReport = async ({
+  expectedArrivalTime,
+  expectedLeaveTime,
+  zoneIds,
+  format, // 'pdf' | 'csv'
+}) => {
+  // lấy data
+  const data = await exports.getStatistical(
+    expectedArrivalTime,
+    expectedLeaveTime,
+    zoneIds
+  );
+
+  // E1: no data
+  if (!data || data.length === 0) {
+    const error = new Error(
+      'Không có dữ liệu cho các bộ lọc đã chọn. Quá trình xuất bị hủy bỏ.'
+    );
+    error.code = 'EMPTY_DATA';
+    throw error;
+  }
+
+  // =======================
+  // CSV
+  // =======================
+  if (format === 'csv') {
+    const parser = new Parser();
+    const csv = parser.parse(data);
+
+    return {
+      type: 'csv',
+      content: csv,
+    };
+  }
+
+  // =======================
+  // PDF
+  // =======================
+  if (format === 'pdf') {
+    const doc = new PDFDocument();
+
+    const buffers = [];
+    doc.on('data', buffers.push.bind(buffers));
+
+    return new Promise((resolve, reject) => {
+      try {
+        doc.fontSize(18).text('Parking Report', { align: 'center' });
+        doc.moveDown();
+
+        data.forEach((item, index) => {
+          doc.fontSize(12).text(
+            `${index + 1}. Zone: ${item.zoneCode}
+Total: ${item.totalSlots}
+Empty: ${item.empty}
+Used: ${item.used}
+% Empty: ${item.percentEmpty.toFixed(2)}%
+% Used: ${item.percentUsed.toFixed(2)}%
+---------------------------------------------------------`
+          );
+        });
+
+        doc.end();
+
+        doc.on('end', () => {
+          const pdfBuffer = Buffer.concat(buffers);
+
+          resolve({
+            type: 'pdf',
+            content: pdfBuffer,
+          });
+        });
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+  throw new Error('Format không hợp lệ');
 };
