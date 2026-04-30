@@ -14,7 +14,7 @@ router.post(
 
 router.post(
   '/notifications/read-all',
-  authMiddleware,
+  authUserMiddleware,
   notificationController.readAllNotification
 );
 
