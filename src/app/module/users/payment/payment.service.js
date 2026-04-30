@@ -4,6 +4,7 @@ const QRPayment = require('../../../models/qrPayment');
 const walletService = require('../../users/wallet/wallet.service'); // thêm
 const userModel = require('../../../models/user.model');
 const parkingSessionModel = require('../../../models/parkingSession.model');
+const notificationService = require('../notification/notification.service');
 
 const BANK_CODE = '970422';
 const ACCOUNT_NUMBER = '2702868679';
@@ -102,6 +103,18 @@ exports.handleWebhook = async ({ amount, content }) => {
       amount,
       transactionId: transaction._id,
     });
+
+    await notificationService.createNotification({
+      userId: transaction.userId,
+      title: 'Nạp tiền thành công',
+      message: `+${amount} VNĐ vào ví`,
+      type: 'TOPUP',
+      metadata: {
+        amount,
+        transactionId: transaction._id,
+        paymentCode: transaction.paymentCode,
+      },
+    });
   }
 
   return transaction;
@@ -136,19 +149,34 @@ exports.handleParkingWebhook = async ({ amount, content }) => {
     throw new Error('Không tìm thấy parking session');
   }
 
-  if (session.statusPayment !== 1) {
+  if (session.status !== 1) {
     session.status = 1;
     session.statusName = 'COMPLETED';
+  }
 
+  if (session.statusPayment !== 1) {
     session.statusPayment = 1;
     session.statusPaymentName = 'PAID';
-
-    if (!session.checkOutTime) {
-      session.checkOutTime = new Date();
-    }
-
-    await session.save();
   }
+
+  if (!session.checkOutTime) {
+    session.checkOutTime = new Date();
+  }
+
+  await session.save();
+
+  await notificationService.createNotification({
+    userId: transaction.userId,
+    title: 'Thanh toán bãi xe thành công',
+    message: `- ${amount} VNĐ phí đỗ xe`,
+    type: 'PARKING',
+    metadata: {
+      amount,
+      transactionId: transaction._id,
+      paymentCode: transaction.paymentCode,
+      parkingSessionId: session._id,
+    },
+  });
 
   return {
     message: 'Thanh toán parking thành công',

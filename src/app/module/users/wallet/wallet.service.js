@@ -1,6 +1,7 @@
 const userModel = require('../../../models/user.model');
 const Wallet = require('../../../models/wallet.model');
 const WalletTransaction = require('../../../models/walletTransaction.model');
+const notificationService = require('../notification/notification.service');
 
 // Lấy ví
 exports.getWallet = async (userId) => {
@@ -140,6 +141,18 @@ exports.payParkingSession = async ({ sessionId, userId }) => {
     // COMMIT
     // =========================
     await session.commitTransaction();
+
+    await notificationService.createNotification({
+      userId,
+      title: 'Thanh toán bãi xe thành công',
+      message: `- ${amount} VNĐ phí đỗ xe`,
+      type: 'PARKING',
+      metadata: {
+        parkingSessionId: parkingSession._id,
+        amount,
+        method: 'WALLET',
+      },
+    });
 
     return {
       message: 'Thanh toán thành công',

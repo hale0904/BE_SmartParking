@@ -21,6 +21,7 @@ const infoAccountRoute = require('../module/users/infoAccount/infoAccount.route'
 const cameraAdminRoute = require('../module/admin/iot/camera/camera.route');
 const licensePlateRoute = require('../module/c-iot/liscensePlate/liscensePlate.route');
 const parkingSessionsUserRoute = require('../module/users/parkingSessions/parkingSessions.route');
+const notificationRoute = require('../module/users/notification/notification.route');
 const router = express.Router();
 
 // Admin
@@ -50,6 +51,7 @@ router.use('/api/us', [
   walletRoute,
   infoAccountRoute,
   parkingSessionsUserRoute,
+  notificationRoute,
 ]);
 
 module.exports = router;
