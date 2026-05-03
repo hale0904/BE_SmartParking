@@ -18,7 +18,7 @@ exports.getListCamera = async (keyword) => {
 };
 
 exports.updateCamera = async (payload) => {
-  const { code, categoryCode } = payload;
+  const { code, categoryCode, isOnline } = payload;
 
   // ======================
   // CREATE
@@ -61,6 +61,11 @@ exports.updateCamera = async (payload) => {
     const category = await categoryIotModel.findOne({ code: categoryCode });
     if (!category) throw new Error('Loại camera không tồn tại');
     cameras.categoryId = category._id;
+  }
+  if (isOnline === null || isOnline === undefined) {
+    throw new Error('Trạng thái online không hợp lệ');
+  } else {
+    cameras.isOnline = isOnline;
   }
 
   await cameras.save();
