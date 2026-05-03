@@ -2,11 +2,12 @@ const statisticsService = require('./statistical.service');
 
 exports.getStatistical = async (req, res) => {
   try {
-    const { expectedArrivalTime, expectedLeaveTime } = req.body;
+    const { expectedArrivalTime, expectedLeaveTime, zoneIds } = req.body;
 
     const data = await statisticsService.getStatistical(
       expectedArrivalTime,
-      expectedLeaveTime
+      expectedLeaveTime,
+      zoneIds
     );
 
     return res.status(200).json({
