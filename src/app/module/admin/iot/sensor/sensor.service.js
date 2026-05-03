@@ -49,9 +49,9 @@ exports.updateSensor = async (payload) => {
       throw new Error('Loại thiết bị không tồn tại');
     }
 
-    if (isOnline === null || isOnline === undefined) {
-      throw new Error('Trạng thái online không hợp lệ');
-    }
+    // if (isOnline === null || isOnline === undefined) {
+    //   throw new Error('Trạng thái online không hợp lệ');
+    // }
 
     const lastItem = await sensorModel
       .findOne({ code: { $regex: /^SS\d+$/ } })
@@ -71,7 +71,7 @@ exports.updateSensor = async (payload) => {
       code: newCode,
       slotId: null,
       isActive: 0,
-      isOnline: isOnline,
+      isOnline: false,
       categoryId: category._id,
     });
 
