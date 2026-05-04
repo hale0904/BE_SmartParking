@@ -1,5 +1,23 @@
 require('dotenv').config();
 const http = require('http');
+const createApp = require('./server');
+const { initSocket } = require('./app/socket/socket');
+
+const app = createApp();
+const PORT = process.env.PORT || 3000;
+
+// tạo http server
+const server = http.createServer(app);
+
+initSocket(server);
+
+// chạy server
+server.listen(PORT, () => {
+  console.log(`Server running at http://localhost:${PORT}`);
+});
+
+/* require('dotenv').config();
+const http = require('http');
 const { Server } = require('socket.io');
 const createApp = require('./server');
 
@@ -31,4 +49,4 @@ io.on('connection', (socket) => {
 // chạy server
 server.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
-});
+});*/
