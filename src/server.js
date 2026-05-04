@@ -12,10 +12,32 @@ function createApp() {
   // ===== CONNECT DB =====
   connectDB();
 
-  // Cors
+  // ===== CORS CONFIG =====
+  const allowedOrigins = [
+    'http://localhost:5173',
+    'https://smartparking.com',
+    'https://car-parking-rouge-seven.vercel.app',
+  ];
+
   app.use(
     cors({
-      origin: ['http://localhost:5173', 'https://smartparking.com'],
+      origin: function (origin, callback) {
+        // cho phép Postman / mobile (không có origin)
+        if (!origin) return callback(null, true);
+
+        // cho phép domain trong whitelist
+        if (allowedOrigins.includes(origin)) {
+          return callback(null, true);
+        }
+
+        // cho phép tất cả domain vercel (preview deploy)
+        if (origin.endsWith('.vercel.app')) {
+          return callback(null, true);
+        }
+
+        return callback(new Error('Not allowed by CORS'));
+      },
+      credentials: true,
     })
   );
 

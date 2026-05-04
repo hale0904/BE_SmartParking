@@ -6,6 +6,7 @@ const slotModel = require('../../../models/slot.model');
 const userModel = require('../../../models/user.model');
 const vehiclesModel = require('../../../models/vehicles.model');
 const zoneModel = require('../../../models/zone.model');
+const notificationService = require('../notification/notification.service');
 
 const STATUS_BOOKING = {
   0: 'Đã hủy',
@@ -167,6 +168,17 @@ exports.bookingSlot = async (payload) => {
     licensePlate: vehicle.licensePlate,
   });
 
+  await notificationService.createNotification({
+    userId: user._id,
+    title: 'Đặt chỗ thành công',
+    message: `Bạn đã đặt chỗ lúc ${new Date(expectedArrivalTime).toLocaleString()}`,
+    type: 'BOOKING',
+    metadata: {
+      bookingId: bookingCreated._id,
+      bookingCode: bookingCreated.code,
+    },
+  });
+
   // update slot -> booked
   // await slotModel.findByIdAndUpdate(slot._id, {
   //   status: 2,
@@ -248,7 +260,16 @@ exports.autoAssignSlotForUpcomingBookings = async () => {
         statusName: STATUS_BOOKING[1],
       });
 
-      continue;
+      await notificationService.createNotification({
+        userId: booking.userId._id,
+        title: 'Đã giữ chỗ',
+        message: 'Slot của bạn đã được giữ, vui lòng đến đúng giờ',
+        type: 'BOOKING_ASSIGNED',
+        metadata: {
+          bookingId: booking._id,
+          slotId: emptySlot._id,
+        },
+      });
     }
 
     // nếu không còn slot và đã đến giờ hoặc quá giờ thì tự hủy
@@ -258,6 +279,16 @@ exports.autoAssignSlotForUpcomingBookings = async () => {
         statusName: STATUS_BOOKING[0],
         cancelReason: 'Hết chỗ trống',
         cancelledAt: new Date(),
+      });
+
+      await notificationService.createNotification({
+        userId: booking.userId._id,
+        title: 'Booking bị hủy',
+        message: 'Bãi xe đã hết chỗ',
+        type: 'BOOKING_CANCEL',
+        metadata: {
+          bookingId: booking._id,
+        },
       });
     }
   }
@@ -294,6 +325,16 @@ exports.releaseUncheckinBookings = async () => {
         statusName: STATUS_BOOKING[0],
         cancelReason: 'Không check-in sau 15 phút',
         cancelledAt: new Date(),
+      });
+
+      await notificationService.createNotification({
+        userId: booking.userId._id,
+        title: 'Booking bị hủy',
+        message: 'Bạn đã không check-in sau 15 phút',
+        type: 'BOOKING_TIMEOUT',
+        metadata: {
+          bookingId: booking._id,
+        },
       });
     }
   }
@@ -340,6 +381,16 @@ exports.cancelBooking = async (bookingCode, userCode) => {
     cancelReason: 'Người dùng tự hủy',
     cancelledAt: new Date(),
     slotId: null,
+  });
+
+  await notificationService.createNotification({
+    userId: booking.userId,
+    title: 'Đã hủy booking',
+    message: `Bạn đã hủy booking ${booking.code}`,
+    type: 'BOOKING_CANCEL',
+    metadata: {
+      bookingId: booking._id,
+    },
   });
 
   return;

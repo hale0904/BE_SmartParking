@@ -18,7 +18,14 @@ const notificationSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ['TOPUP', 'PARKING'],
+      enum: [
+        'TOPUP',
+        'PARKING',
+        'BOOKING',
+        'BOOKING_ASSIGNED',
+        'BOOKING_CANCEL',
+        'BOOKING_TIMEOUT',
+      ],
       required: true,
     },
     isRead: {

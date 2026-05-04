@@ -217,32 +217,80 @@ exports.handleSensorChange = async (sensor) => {
     status: { $in: [1, 2] },
   });
 
-  // SENSOR ON
+  const now = new Date();
+
+  // =========================
+  // CASE: CÓ BOOKING
+  // =========================
+  if (booking) {
+    const arrivalTime = new Date(booking.expectedArrivalTime);
+
+    // CHƯA TỚI GIỜ
+    if (now < arrivalTime) {
+      // luôn giữ slot là "đặt trước"
+      if (slot.status !== 2) {
+        slot.status = 2;
+        slot.statusName = STATUS_SLOT[2];
+        await slot.save();
+      }
+
+      // KHÔNG cho phép sensor làm thay đổi booking
+      return;
+    }
+
+    // =========================
+    // ĐÃ TỚI GIỜ
+    // =========================
+
+    // SENSOR ON (xe vào)
+    if (sensor.isActive === 1) {
+      if (slot.status !== 1) {
+        slot.status = 1;
+        slot.statusName = STATUS_SLOT[1];
+      }
+
+      // chuyển từ "đặt trước" -> "đã gán"
+      if (booking.status === 2) {
+        booking.status = 1;
+        booking.statusName = STATUS_BOOKING[1];
+      }
+
+      await Promise.all([slot.save(), booking.save()]);
+      return;
+    }
+
+    // SENSOR OFF (xe rời)
+    if (sensor.isActive === 0 && slot.status === 1) {
+      slot.status = 0;
+      slot.statusName = STATUS_SLOT[0];
+
+      if (booking.status === 1) {
+        booking.status = 3;
+        booking.statusName = STATUS_BOOKING[3];
+        booking.completedAt = now;
+      }
+
+      await Promise.all([slot.save(), booking.save()]);
+      return;
+    }
+  }
+
+  // =========================
+  // CASE: KHÔNG CÓ BOOKING
+  // =========================
+
   if (sensor.isActive === 1) {
     if (slot.status !== 1) {
       slot.status = 1;
       slot.statusName = STATUS_SLOT[1];
+      await slot.save();
     }
-
-    if (booking && booking.status === 1) {
-      booking.statusName = STATUS_BOOKING[1];
-    }
-
-    await Promise.all([slot.save(), booking ? booking.save() : null]);
     return;
   }
 
-  // SENSOR OFF
   if (sensor.isActive === 0 && slot.status === 1) {
     slot.status = 0;
     slot.statusName = STATUS_SLOT[0];
-
-    if (booking && booking.status === 1) {
-      booking.status = 3;
-      booking.statusName = STATUS_BOOKING[3];
-      booking.completedAt = new Date();
-    }
-
-    await Promise.all([slot.save(), booking ? booking.save() : null]);
+    await slot.save();
   }
 };

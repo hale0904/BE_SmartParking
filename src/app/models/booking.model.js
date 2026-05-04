@@ -28,16 +28,6 @@ const BookingSchema = new mongoose.Schema(
       type: Date,
       required: true,
     },
-    // expectedLeaveTime: {
-    //   type: Date,
-    //   required: true,
-    //   validate: {
-    //     validator: function (value) {
-    //       return value > this.expectedArrivalTime;
-    //     },
-    //     message: 'Giờ rời phải lớn hơn giờ đến',
-    //   },
-    // },
     status: {
       type: Number,
       required: true,
