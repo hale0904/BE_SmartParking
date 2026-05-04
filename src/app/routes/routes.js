@@ -22,6 +22,7 @@ const cameraAdminRoute = require('../module/admin/iot/camera/camera.route');
 const licensePlateRoute = require('../module/c-iot/liscensePlate/liscensePlate.route');
 const parkingSessionsUserRoute = require('../module/users/parkingSessions/parkingSessions.route');
 const notificationRoute = require('../module/users/notification/notification.route');
+const parkingSessionRoute = require('../module/admin/parkingSessions/parkingSessions.route');
 const router = express.Router();
 
 // Admin
@@ -37,6 +38,7 @@ router.use('/api/ad', [
   categoryIotRoute,
   accountUserRoute,
   cameraAdminRoute,
+  parkingSessionRoute,
 ]);
 
 router.use('/api', [sensorRouter, licensePlateRoute]);

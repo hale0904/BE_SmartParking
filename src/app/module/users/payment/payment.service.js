@@ -168,18 +168,20 @@ exports.handleParkingWebhook = async ({ amount, content }) => {
 
   await session.save();
 
-  await notificationService.createNotification({
-    userId: transaction.userId,
-    title: 'Thanh toán bãi xe thành công',
-    message: `- ${amount} VNĐ phí đỗ xe`,
-    type: 'PARKING',
-    metadata: {
-      amount,
-      transactionId: transaction._id,
-      paymentCode: transaction.paymentCode,
-      parkingSessionId: session._id,
-    },
-  });
+  if (transaction.userId) {
+    await notificationService.createNotification({
+      userId: transaction.userId,
+      title: 'Thanh toán bãi xe thành công',
+      message: `- ${amount} VNĐ phí đỗ xe`,
+      type: 'PARKING',
+      metadata: {
+        amount,
+        transactionId: transaction._id,
+        paymentCode: transaction.paymentCode,
+        parkingSessionId: session._id,
+      },
+    });
+  }
 
   return {
     message: 'Thanh toán parking thành công',
