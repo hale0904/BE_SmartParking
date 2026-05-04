@@ -3,6 +3,48 @@ const cors = require('cors');
 const express = require('express');
 const connectDB = require('./app/config/db.config');
 const routes = require('./app/routes/routes');
+const { isOriginAllowed, parseAllowedOrigins } = require('./app/socket/socket');
+
+require('./app/cron/booking.cron');
+
+function createApp() {
+  const app = express();
+
+  connectDB();
+
+  const allowedOrigins = parseAllowedOrigins();
+
+  app.use(
+    cors({
+      origin(origin, callback) {
+        if (!origin) return callback(null, true);
+
+        if (isOriginAllowed(origin, allowedOrigins)) {
+          return callback(null, true);
+        }
+
+        return callback(new Error('Not allowed by CORS'));
+      },
+      credentials: true,
+    })
+  );
+
+  app.use(express.json());
+  app.use(express.urlencoded({ extended: true }));
+  app.use(express.static(path.join(__dirname, 'public')));
+
+  app.use('/', routes);
+
+  return app;
+}
+
+module.exports = createApp;
+
+/*const path = require('path');
+const cors = require('cors');
+const express = require('express');
+const connectDB = require('./app/config/db.config');
+const routes = require('./app/routes/routes');
 
 require('./app/cron/booking.cron');
 
@@ -55,4 +97,4 @@ function createApp() {
   return app;
 }
 
-module.exports = createApp;
+module.exports = createApp; */
