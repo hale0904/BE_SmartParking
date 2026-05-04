@@ -79,7 +79,9 @@ const getIo = () => ioInstance;
 
 const emitSlotUpdate = (payload) => {
   if (!ioInstance) {
-    console.warn('Socket emit skipped because socket server is not initialized yet.');
+    console.warn(
+      'Socket emit skipped because socket server is not initialized yet.'
+    );
     return false;
   }
 
@@ -99,3 +101,5 @@ module.exports = {
   isOriginAllowed,
   parseAllowedOrigins,
 };
+
+/* Test*/
