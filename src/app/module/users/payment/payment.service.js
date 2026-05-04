@@ -46,14 +46,17 @@ exports.createTopupQR = async ({ userId, amount }) => {
 
 // TẠO QR THANH TOÁN PARKING
 exports.createParkingQR = async ({ userId, amount, sessionId }) => {
-  const user = await userModel.findById(userId);
-  if (!user) throw new Error('Không tìm thấy user');
+  let user = null;
+
+  if (userId) {
+    user = await userModel.findById(userId);
+  }
 
   const paymentCode = 'PARK_' + uuidv4().slice(0, 8);
 
   const transaction = await Transaction.create({
     code: paymentCode,
-    userId: user._id,
+    userId: user?._id || null,
     type: 'PARKING',
     amount,
     paymentMethod: 'QR',
