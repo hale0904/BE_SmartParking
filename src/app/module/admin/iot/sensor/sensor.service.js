@@ -311,11 +311,14 @@ exports.assignSlotToSession = async ({ slotId }) => {
   }
 
   // assign
-  const session = await parkingSessionModel.findOneAndUpdate(
+  // =========================
+  // ƯU TIÊN SESSION CÓ BOOKING
+  // =========================
+  let session = await parkingSessionModel.findOneAndUpdate(
     {
       status: 0,
       slotId: null,
-      bookingId: null,
+      bookingId: { $ne: null },
     },
     {
       $set: {
@@ -329,8 +332,27 @@ exports.assignSlotToSession = async ({ slotId }) => {
     }
   );
 
+  // =========================
+  // FALLBACK: SESSION KHÔNG BOOKING
+  // =========================
   if (!session) {
-    return null;
+    session = await parkingSessionModel.findOneAndUpdate(
+      {
+        status: 0,
+        slotId: null,
+        bookingId: null,
+      },
+      {
+        $set: {
+          slotId,
+          checkInTime: new Date(),
+        },
+      },
+      {
+        sort: { createdAt: 1 },
+        new: true,
+      }
+    );
   }
 
   return session;

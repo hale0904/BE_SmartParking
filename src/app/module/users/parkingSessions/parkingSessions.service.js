@@ -8,6 +8,13 @@ const paymentService = require('../payment/payment.service');
 const Transaction = require('../../../models/transaction.model');
 const QRPayment = require('../../../models/qrPayment');
 
+const STATUS_BOOKING = {
+  0: 'Đã hủy',
+  1: 'Đã gán vị trí',
+  2: 'Đặt trước',
+  3: 'Đã hoàn thành',
+};
+
 exports.getParkingSessions = async (payload) => {
   const { status, plateNumber, fromDate, toDate, userCode } = payload;
 
@@ -113,7 +120,7 @@ exports.handleParkingSession = async (licensePlate) => {
   const vehicle = await vehicleModel.findOne({ licensePlate: plateNumber });
   const booking = await bookingModel.findOne({
     licensePlate: plateNumber,
-    status: { $in: [1] },
+    status: { $in: [1, 2] },
   });
 
   const userId = vehicle?.userId;
@@ -136,6 +143,18 @@ exports.handleParkingSession = async (licensePlate) => {
   // CASE 1: XE RA
   // =========================
   if (existingSession) {
+    // CẬP NHẬT BOOKING NẾU CÓ
+    if (existingSession.bookingId) {
+      const booking = await bookingModel.findById(existingSession.bookingId);
+
+      if (booking && booking.status === 1) {
+        booking.status = 3;
+        booking.statusName = STATUS_BOOKING[3];
+
+        await booking.save();
+      }
+    }
+
     // nếu đã thanh toán rồi thì bỏ
     if (existingSession.statusPayment === 1) {
       return {
@@ -234,6 +253,26 @@ exports.handleParkingSession = async (licensePlate) => {
   // =========================
   // CASE 2: XE VÀO
   // =========================
+
+  if (booking) {
+    // CASE 1: booking từ ĐẶT TRƯỚC -> ĐÃ GÁN
+    if (booking.status === 2) {
+      booking.status = 1;
+      booking.statusName = STATUS_BOOKING[1];
+
+      // cập nhật giờ thực tế
+      booking.expectedArrivalTime = time;
+
+      await booking.save();
+    }
+
+    // CASE 2: đã gán rồi -> chỉ update giờ
+    else if (booking.status === 1) {
+      booking.expectedArrivalTime = time;
+      await booking.save();
+    }
+  }
+
   const newSession = await parkingSessionModel.create({
     code: `PS_${Date.now()}`,
     checkInTime: time,
