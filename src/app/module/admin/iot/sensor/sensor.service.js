@@ -68,14 +68,15 @@ exports.getListSensor = async (keyword) => {
 exports.updateSensor = async (payload) => {
   const { code, categoryCode, isOnline, isActive } = payload;
 
+  // CREATE
   if (!code || Number(code) === 0) {
     const category = await categoryIotModel.findOne({ code: categoryCode });
     if (!category) {
-      throw new Error('Loai thiet bi khong ton tai');
+      throw new Error('Loại thiết bị không tồn tại');
     }
 
     const lastItem = await sensorModel
-      .findOne({ code: { $regex: /^SS\\d+$/ } })
+      .findOne({ code: { $regex: /^SS\d+$/ } })
       .sort({ code: -1 })
       .select('code');
 
@@ -99,55 +100,36 @@ exports.updateSensor = async (payload) => {
     return { isCreate: true, data: sensorCreate };
   }
 
+  // UPDATE
   const sensors = await sensorModel.findOne({ code });
-  if (!sensors) throw new Error('Thiet bi khong ton tai');
-
+  if (!sensors) throw new Error('Thiết bị không tồn tại');
   if (categoryCode !== undefined) {
     const category = await categoryIotModel.findOne({ code: categoryCode });
-    if (!category) throw new Error('Loai thiet bi khong ton tai');
+    if (!category) throw new Error('Loại thiết bị không tồn tại');
     sensors.categoryId = category._id;
   }
 
-  const hasIsOnline = isOnline !== null && isOnline !== undefined;
-  const hasIsActive = isActive !== null && isActive !== undefined;
-
-  if (!hasIsOnline && !hasIsActive && categoryCode === undefined) {
-    throw new Error('Khong co du lieu hop le de cap nhat sensor');
-  }
-
-  if (hasIsOnline) {
+  if (isOnline === null || isOnline === undefined) {
+    throw new Error('Trạng thái online không hợp lệ');
+  } else {
     sensors.isOnline = isOnline;
   }
-  if (hasIsActive) {
-    sensors.isActive = Number(isActive);
-  }
   await sensors.save();
-
-  if (hasIsActive) {
-    console.log('[admin] sensor isActive updated in database', {
-      sensorCode: sensors.code,
-      slotId: sensors.slotId?.toString?.() || null,
-      isActive: sensors.isActive,
-      isOnline: sensors.isOnline,
-    });
-  }
 
   return { isCreate: false, data: sensors };
 };
 
 exports.deleteSensor = async (items = []) => {
   if (!Array.isArray(items) || items.length === 0) {
-    throw new Error('Danh sach thiet bi khong hop le');
+    throw new Error('Danh sách thiết bị không hợp lệ');
   }
 
   const codes = items
     .map((item) => (typeof item === 'string' ? item : item.code))
-    .filter(
-      (itemCode) => typeof itemCode === 'string' && itemCode.trim() !== ''
-    );
+    .filter((code) => typeof code === 'string' && code.trim() !== '');
 
   if (codes.length === 0) {
-    throw new Error('Khong tim thay ma thiet bi hop le');
+    throw new Error('Không tìm thấy mã thiết bị hợp lệ');
   }
 
   const sensors = await sensorModel.find({
@@ -155,28 +137,35 @@ exports.deleteSensor = async (items = []) => {
   });
 
   if (sensors.length === 0) {
-    throw new Error('Thiet bi khong ton tai');
+    throw new Error('Thiết bị không tồn tại');
   }
 
+  // =========================
+  // CHECK thiếu code
+  // =========================
   if (sensors.length !== codes.length) {
-    const foundCodes = sensors.map((sensor) => sensor.code);
-    const missingCodes = codes.filter(
-      (itemCode) => !foundCodes.includes(itemCode)
-    );
+    const foundCodes = sensors.map((s) => s.code);
+    const missingCodes = codes.filter((c) => !foundCodes.includes(c));
 
-    throw new Error(`Thiet bi khong ton tai: ${missingCodes.join(', ')}`);
+    throw new Error(`Thiết bị không tồn tại: ${missingCodes.join(', ')}`);
   }
 
-  const lockedSensors = sensors.filter((sensor) => sensor.slotId !== null);
+  // =========================
+  //  NEW: CHECK SLOT
+  // =========================
+  const lockedSensors = sensors.filter((s) => s.slotId !== null);
 
   if (lockedSensors.length > 0) {
-    const lockedCodes = lockedSensors.map((sensor) => sensor.code);
+    const lockedCodes = lockedSensors.map((s) => s.code);
     throw new Error(
-      `Khong the xoa thiet bi dang gan slot: ${lockedCodes.join(', ')}`
+      `Không thể xoá thiết bị đang gắn slot: ${lockedCodes.join(', ')}`
     );
   }
 
-  const sensorIds = sensors.map((sensor) => sensor._id);
+  // =========================
+  // DELETE
+  // =========================
+  const sensorIds = sensors.map((s) => s._id);
   const result = await sensorModel.deleteMany({
     _id: { $in: sensorIds },
   });
@@ -288,6 +277,63 @@ exports.handleSensorChange = async (sensor) => {
       source: 'sensor-available',
     });
   }
+};
+
+const parkingSessionModel = require('../../../../models/parkingSession.model');
+
+exports.assignSlotToSession = async ({ slotId }) => {
+  if (!slotId) return null;
+
+  //  Check slot hợp lệ
+  const slot = await slotModel.findById(slotId);
+
+  if (!slot) return null;
+
+  // Không gán nếu slot đang đặt trước
+  if (slot.status === 2) {
+    console.log('[assignSlot] Slot đang được đặt trước, bỏ qua', {
+      slotId,
+    });
+    return null;
+  }
+
+  // Check slot đã được dùng bởi session chưa
+  const existedSession = await parkingSessionModel.findOne({
+    slotId,
+    status: 0,
+  });
+
+  if (existedSession) {
+    console.log('[assignSlot] Slot đã được gán session khác', {
+      slotId,
+    });
+    return null;
+  }
+
+  // assign
+  const session = await parkingSessionModel.findOneAndUpdate(
+    {
+      status: 0,
+      slotId: null,
+      bookingId: null,
+    },
+    {
+      $set: {
+        slotId,
+        checkInTime: new Date(),
+      },
+    },
+    {
+      sort: { createdAt: 1 },
+      new: true,
+    }
+  );
+
+  if (!session) {
+    return null;
+  }
+
+  return session;
 };
 
 /* File này trờ đi của Hà
