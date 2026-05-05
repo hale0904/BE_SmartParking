@@ -260,3 +260,23 @@ Used: ${item.used}
 
   throw new Error('Format không hợp lệ');
 };
+
+exports.validateParkingConflict = async () => {
+  // 1. Đếm slot có xe
+  const totalOccupied = await slotModel.countDocuments({ status: 1 });
+
+  // 2. Đếm session ongoing
+  const totalActiveSessions = await parkingSessionModel.countDocuments({
+    status: 0,
+  });
+
+  // 3. So sánh
+  const isConflict = totalOccupied > totalActiveSessions;
+
+  return {
+    isConflict,
+    totalOccupied,
+    totalActiveSessions,
+    message: isConflict ? 'Xung đột đỗ xe!' : 'Hệ thống bình thường',
+  };
+};

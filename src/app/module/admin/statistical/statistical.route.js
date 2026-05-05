@@ -20,6 +20,12 @@ router.post(
   statisticalController.getTurnover
 );
 
-router.post('/export', statisticalController.exportReport);
+router.post('/export', authAdminMiddleware, statisticalController.exportReport);
+
+router.post(
+  '/validateConflict',
+  authAdminMiddleware,
+  statisticalController.checkParkingConflict
+);
 
 module.exports = router;

@@ -119,3 +119,22 @@ exports.exportReport = async (req, res) => {
     });
   }
 };
+
+exports.checkParkingConflict = async (req, res) => {
+  try {
+    const result = await statisticsService.validateParkingConflict();
+
+    return res.status(200).json({
+      success: true,
+      message: result.isConflict,
+      data: result,
+    });
+  } catch (error) {
+    console.error('CHECK_CONFLICT_ERROR:', error);
+
+    return res.status(500).json({
+      success: false,
+      message: error,
+    });
+  }
+};
