@@ -75,8 +75,16 @@ exports.updateVehicles = async (payload) => {
       throw new Error('Thiếu thông tin phương tiện');
     }
 
-    const count = await vehilcesModel.countDocuments();
-    const newCode = `VE${String(count + 1).padStart(3, '0')}`;
+    let newCode;
+    let isExist = true;
+
+    while (isExist) {
+      const random = Math.random().toString(36).substring(2, 8).toUpperCase();
+      newCode = `VE_${random}`;
+
+      const existing = await vehilcesModel.findOne({ code: newCode });
+      if (!existing) isExist = false;
+    }
 
     const finalStatus =
       status !== undefined && status !== null ? Number(status) : 0;
