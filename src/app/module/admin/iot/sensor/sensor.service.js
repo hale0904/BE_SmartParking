@@ -1,5 +1,6 @@
 const bookingModel = require('../../../../models/booking.model');
 const categoryIotModel = require('../../../../models/categoryIot.model');
+const parkingSessionModel = require('../../../../models/parkingSession.model');
 const sensorModel = require('../../../../models/sensor.model');
 const slotModel = require('../../../../models/slot.model');
 const { emitSlotUpdate } = require('../../../../socket/socket');
@@ -12,9 +13,9 @@ const STATUS_BOOKING = {
 };
 
 const STATUS_SLOT = {
-  0: 'Vi tri trong',
-  1: 'Vi tri co xe',
-  2: 'Vi tri dat truoc',
+  0: 'Vi tri trống',
+  1: 'Vi tri có xe',
+  2: 'Vi tri đặt trước',
   3: 'Vi tri loi/Vi tri dang chinh sua',
 };
 
@@ -198,69 +199,88 @@ exports.handleSensorChange = async (sensor) => {
     sensorCode: sensor.code,
   };
   const now = new Date();
+  if (Number(sensor.isActive) === 1) {
+    // =========================
+    // SLOT -> OCCUPIED
+    // =========================
+    if (slot.status !== 1) {
+      slot.status = 1;
+      slot.statusName = STATUS_SLOT[1];
+      await slot.save();
+    }
 
-  if (booking) {
-    const arrivalTime = new Date(booking.expectedArrivalTime);
+    // =========================
+    // CHECK XE ĐÚNG BOOKING?
+    // =========================
+    const correctSession = await parkingSessionModel.findOne({
+      bookingId: booking._id,
+      status: 0,
+    });
 
-    if (now < arrivalTime) {
-      await emitSlotStatusIfChanged(slot, 2, {
-        ...meta,
-        source: 'booking-pre-arrival',
+    // =========================
+    // CASE 1: SLOT BỊ CHIẾM
+    // =========================
+    if (!correctSession) {
+      // tìm slot xanh khác
+      const newSlot = await slotModel.findOne({
+        status: 0,
+        _id: { $ne: slot._id },
       });
-      return;
-    }
 
-    if (sensor.isActive === 1) {
-      const shouldSaveSlot = slot.status !== 1;
-      if (shouldSaveSlot) {
-        slot.status = 1;
-        slot.statusName = STATUS_SLOT[1];
+      if (newSlot) {
+        // slot mới -> vàng
+        newSlot.status = 2;
+        newSlot.statusName = STATUS_SLOT[2];
+
+        await newSlot.save();
+
+        // booking chuyển sang slot mới
+        booking.slotId = newSlot._id;
+
+        await booking.save();
+
+        console.log(
+          '[BOOKING] slot reassigned',
+          booking.code,
+          '=>',
+          newSlot.code
+        );
       }
 
-      if (booking.status === 2) {
-        booking.status = 1;
-        booking.statusName = STATUS_BOOKING[1];
-      }
+      await slot.save();
 
-      await Promise.all([
-        shouldSaveSlot ? slot.save() : Promise.resolve(),
-        booking.save(),
-      ]);
-
-      if (shouldSaveSlot) {
-        logSlotUpdateEmission(slot, sensor, 'sensor-booking-arrival');
-        emitSlotUpdate({
-          slotId: slot._id,
-          slotCode: slot.code,
-          slotStatus: slot.status,
-          ...meta,
-          source: 'sensor-booking-arrival',
-        });
-      }
-      return;
-    }
-
-    if (sensor.isActive === 0 && slot.status === 1) {
-      slot.status = 0;
-      slot.statusName = STATUS_SLOT[0];
-
-      if (booking.status === 1) {
-        booking.status = 3;
-        booking.statusName = STATUS_BOOKING[3];
-        booking.completedAt = now;
-      }
-
-      await Promise.all([slot.save(), booking.save()]);
-      logSlotUpdateEmission(slot, sensor, 'sensor-booking-leave');
       emitSlotUpdate({
         slotId: slot._id,
         slotCode: slot.code,
         slotStatus: slot.status,
         ...meta,
-        source: 'sensor-booking-leave',
+        source: 'slot-stolen',
       });
+
       return;
     }
+
+    // =========================
+    // CASE 2: ĐÚNG XE BOOKING
+    // =========================
+    if (booking.status === 2) {
+      booking.status = 1;
+      booking.statusName = STATUS_BOOKING[1];
+
+      await booking.save();
+    }
+
+    await slot.save();
+
+    emitSlotUpdate({
+      slotId: slot._id,
+      slotCode: slot.code,
+      slotStatus: slot.status,
+      ...meta,
+      source: 'booking-owner-arrived',
+    });
+
+    return;
   }
 
   if (sensor.isActive === 1) {
@@ -279,84 +299,84 @@ exports.handleSensorChange = async (sensor) => {
   }
 };
 
-const parkingSessionModel = require('../../../../models/parkingSession.model');
+// const parkingSessionModel = require('../../../../models/parkingSession.model');
 
-exports.assignSlotToSession = async ({ slotId }) => {
-  if (!slotId) return null;
+// exports.assignSlotToSession = async ({ slotId }) => {
+//   if (!slotId) return null;
 
-  //  Check slot hợp lệ
-  const slot = await slotModel.findById(slotId);
+//   //  Check slot hợp lệ
+//   const slot = await slotModel.findById(slotId);
 
-  if (!slot) return null;
+//   if (!slot) return null;
 
-  // Không gán nếu slot đang đặt trước
-  if (slot.status === 2) {
-    console.log('[assignSlot] Slot đang được đặt trước, bỏ qua', {
-      slotId,
-    });
-    return null;
-  }
+//   // Không gán nếu slot đang đặt trước
+//   if (slot.status === 2) {
+//     console.log('[assignSlot] Slot đang được đặt trước, bỏ qua', {
+//       slotId,
+//     });
+//     return null;
+//   }
 
-  // Check slot đã được dùng bởi session chưa
-  const existedSession = await parkingSessionModel.findOne({
-    slotId,
-    status: 0,
-  });
+//   // Check slot đã được dùng bởi session chưa
+//   const existedSession = await parkingSessionModel.findOne({
+//     slotId,
+//     status: 0,
+//   });
 
-  if (existedSession) {
-    console.log('[assignSlot] Slot đã được gán session khác', {
-      slotId,
-    });
-    return null;
-  }
+//   if (existedSession) {
+//     console.log('[assignSlot] Slot đã được gán session khác', {
+//       slotId,
+//     });
+//     return null;
+//   }
 
-  // assign
-  // =========================
-  // ƯU TIÊN SESSION CÓ BOOKING
-  // =========================
-  let session = await parkingSessionModel.findOneAndUpdate(
-    {
-      status: 0,
-      slotId: null,
-      bookingId: { $ne: null },
-    },
-    {
-      $set: {
-        slotId,
-        checkInTime: new Date(),
-      },
-    },
-    {
-      sort: { createdAt: 1 },
-      new: true,
-    }
-  );
+//   // assign
+//   // =========================
+//   // ƯU TIÊN SESSION CÓ BOOKING
+//   // =========================
+//   let session = await parkingSessionModel.findOneAndUpdate(
+//     {
+//       status: 0,
+//       slotId: null,
+//       bookingId: { $ne: null },
+//     },
+//     {
+//       $set: {
+//         slotId,
+//         checkInTime: new Date(),
+//       },
+//     },
+//     {
+//       sort: { createdAt: 1 },
+//       new: true,
+//     }
+//   );
 
-  // =========================
-  // FALLBACK: SESSION KHÔNG BOOKING
-  // =========================
-  if (!session) {
-    session = await parkingSessionModel.findOneAndUpdate(
-      {
-        status: 0,
-        slotId: null,
-        bookingId: null,
-      },
-      {
-        $set: {
-          slotId,
-          checkInTime: new Date(),
-        },
-      },
-      {
-        sort: { createdAt: 1 },
-        new: true,
-      }
-    );
-  }
+//   // =========================
+//   // FALLBACK: SESSION KHÔNG BOOKING
+//   // =========================
+//   if (!session) {
+//     session = await parkingSessionModel.findOneAndUpdate(
+//       {
+//         status: 0,
+//         slotId: null,
+//         bookingId: null,
+//       },
+//       {
+//         $set: {
+//           slotId,
+//           checkInTime: new Date(),
+//         },
+//       },
+//       {
+//         sort: { createdAt: 1 },
+//         new: true,
+//       }
+//     );
+//   }
 
-  return session;
-};
+//   return session;
+// };
 
 /* File này trờ đi của Hà
 const bookingModel = require('../../../../models/booking.model');

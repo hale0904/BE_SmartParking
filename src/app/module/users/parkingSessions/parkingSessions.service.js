@@ -7,6 +7,7 @@ const walletService = require('../wallet/wallet.service');
 const paymentService = require('../payment/payment.service');
 const Transaction = require('../../../models/transaction.model');
 const QRPayment = require('../../../models/qrPayment');
+const slotModel = require('../../../models/slot.model');
 
 const STATUS_BOOKING = {
   0: 'Đã hủy',
@@ -15,6 +16,14 @@ const STATUS_BOOKING = {
   3: 'Đã hoàn thành',
 };
 
+const STATUS_SLOT = {
+  0: 'Vị trí trống',
+  1: 'Vị trí có xe',
+  2: 'Vị trí đặt trước',
+  3: 'Vị trí lỗi/ Vị trí đang chỉnh sửa',
+};
+
+//#region Get Parking Session
 exports.getParkingSessions = async (payload) => {
   const { status, plateNumber, fromDate, toDate, userCode } = payload;
 
@@ -106,7 +115,7 @@ const PAYMENT_STATUS_NAME = {
   1: 'PAID',
 };
 
-// XỬ LÝ CHECKIN/CHECKOUT
+//#region HandleParkingSession
 exports.handleParkingSession = async (licensePlate) => {
   const { plateNumber, capturedAt, _id } = licensePlate;
 
@@ -118,10 +127,20 @@ exports.handleParkingSession = async (licensePlate) => {
   // TÌM VEHICLE + BOOKING
   // =========================
   const vehicle = await vehicleModel.findOne({ licensePlate: plateNumber });
-  const booking = await bookingModel.findOne({
-    licensePlate: plateNumber,
-    status: { $in: [1, 2] },
-  });
+
+  const now = new Date();
+  const next5Hours = new Date(now.getTime() + 5 * 60 * 60 * 1000);
+  const booking = await bookingModel
+    .findOne({
+      licensePlate: plateNumber,
+      status: { $in: [1, 2] },
+
+      expectedArrivalTime: {
+        $gte: now,
+        $lte: next5Hours,
+      },
+    })
+    .sort({ expectedArrivalTime: 1 });
 
   const userId = vehicle?.userId;
 
@@ -144,16 +163,16 @@ exports.handleParkingSession = async (licensePlate) => {
   // =========================
   if (existingSession) {
     // CẬP NHẬT BOOKING NẾU CÓ
-    if (existingSession.bookingId) {
-      const booking = await bookingModel.findById(existingSession.bookingId);
+    // if (existingSession.bookingId) {
+    //   const booking = await bookingModel.findById(existingSession.bookingId);
 
-      if (booking && booking.status === 1) {
-        booking.status = 3;
-        booking.statusName = STATUS_BOOKING[3];
+    //   if (booking && booking.status === 1) {
+    //     booking.status = 3;
+    //     booking.statusName = STATUS_BOOKING[3];
 
-        await booking.save();
-      }
-    }
+    //     await booking.save();
+    //   }
+    // }
 
     // nếu đã thanh toán rồi thì bỏ
     if (existingSession.statusPayment === 1) {
@@ -255,22 +274,28 @@ exports.handleParkingSession = async (licensePlate) => {
   // =========================
 
   if (booking) {
-    // CASE 1: booking từ ĐẶT TRƯỚC -> ĐÃ GÁN
-    if (booking.status === 2) {
-      booking.status = 1;
-      booking.statusName = STATUS_BOOKING[1];
+    // =========================
+    // RELEASE SLOT HOLDING
+    // =========================
+    if (booking.slotId) {
+      await slotModel.findByIdAndUpdate(booking.slotId, {
+        status: 0,
+        statusName: STATUS_SLOT[0],
+      });
 
-      // cập nhật giờ thực tế
-      booking.expectedArrivalTime = time;
-
-      await booking.save();
+      // bỏ slot khỏi booking
+      booking.slotId = null;
     }
 
-    // CASE 2: đã gán rồi -> chỉ update giờ
-    else if (booking.status === 1) {
-      booking.expectedArrivalTime = time;
-      await booking.save();
-    }
+    // =========================
+    // HOÀN THÀNH BOOKING
+    // =========================
+    booking.expectedArrivalTime = time;
+
+    booking.status = 3;
+    booking.statusName = STATUS_BOOKING[3];
+
+    await booking.save();
   }
 
   const newSession = await parkingSessionModel.create({
@@ -282,8 +307,8 @@ exports.handleParkingSession = async (licensePlate) => {
     licensePlateId: _id,
 
     vehicleId: vehicle?._id || null,
-    bookingId: booking?._id || null,
-    slotId: booking?.slotId || null,
+    // bookingId: booking?._id || null,
+    // slotId: booking?.slotId || null,
 
     userId,
 

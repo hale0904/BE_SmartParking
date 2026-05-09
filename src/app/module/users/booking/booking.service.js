@@ -22,6 +22,7 @@ const STATUS_SLOT = {
   3: 'Vị trí lỗi/ Vị trí đang chỉnh sửa',
 };
 
+//#region Get List Booking
 exports.getListBooking = async (status, keyword, userId) => {
   if (!userId) {
     throw new Error('Thiếu mã của người dùng');
@@ -57,33 +58,19 @@ exports.getListBooking = async (status, keyword, userId) => {
   return booking;
 };
 
+//#region Booking
 exports.bookingSlot = async (payload) => {
-  const {
-    userId,
-    // slotId,
-    vehiclesId,
-    expectedArrivalTime,
-    // expectedLeaveTime,
-    status,
-  } = payload;
+  const { userId, vehiclesId, expectedArrivalTime, status } = payload;
 
-  if (
-    !userId ||
-    // !slotId ||
-    !vehiclesId ||
-    !expectedArrivalTime
-    // !expectedLeaveTime
-  ) {
+  if (!userId || !vehiclesId || !expectedArrivalTime) {
     throw new Error('Thiếu thông tin đặt chỗ');
   }
 
   const user = await userModel.findOne({ code: userId });
   const vehicle = await vehiclesModel.findOne({ code: vehiclesId });
-  // const slot = await slotModel.findOne({ code: slotId });
 
   if (!user) throw new Error('User không tồn tại');
   if (!vehicle) throw new Error('Xe không tồn tại');
-  // if (!slot) throw new Error('Slot không tồn tại');
 
   const timeNow = new Date();
   const timeNext = new Date(expectedArrivalTime);
@@ -102,7 +89,7 @@ exports.bookingSlot = async (payload) => {
 
   const conflictBooking = await bookingModel.findOne({
     userId: user._id,
-    status: 2,
+    status: { $in: [1, 2] },
     expectedArrivalTime: {
       $gte: startTime,
       $lte: endTime,
@@ -112,32 +99,6 @@ exports.bookingSlot = async (payload) => {
   if (conflictBooking) {
     throw new Error('Mỗi lần đặt phải cách nhau ít nhất 4 tiếng');
   }
-
-  // const BUFFER = 15 * 60 * 1000; // 15 phút
-
-  // const arrival = new Date(expectedArrivalTime);
-  // const leave = new Date(expectedLeaveTime);
-
-  // // nới rộng khoảng thời gian
-  // const arrivalWithBuffer = new Date(arrival.getTime() - BUFFER);
-  // const leaveWithBuffer = new Date(leave.getTime() + BUFFER);
-
-  // validate trước
-  // if (leave <= arrival) {
-  //   throw new Error('Thời gian không hợp lệ');
-  // }
-
-  // check trùng giờ (OVERLAP)
-  // const isConflict = await bookingModel.findOne({
-  //   slotId: slot._id,
-  //   status: { $in: [1, 2] },
-  //   expectedArrivalTime: { $lt: leaveWithBuffer },
-  //   expectedLeaveTime: { $gt: arrivalWithBuffer },
-  // });
-
-  // if (isConflict) {
-  //   throw new Error('Vị trí đã được đặt trong khoảng thời gian này');
-  // }
 
   const lastItem = await bookingModel
     .findOne({ code: { $regex: /^BK\d+$/ } })
@@ -162,7 +123,6 @@ exports.bookingSlot = async (payload) => {
     slotId: null,
     vehiclesId: vehicle._id,
     expectedArrivalTime,
-    // expectedLeaveTime,
     status: finalStatus,
     statusName: STATUS_BOOKING[finalStatus],
     licensePlate: vehicle.licensePlate,
@@ -179,12 +139,6 @@ exports.bookingSlot = async (payload) => {
     },
   });
 
-  // update slot -> booked
-  // await slotModel.findByIdAndUpdate(slot._id, {
-  //   status: 2,
-  //   statusName: STATUS_SLOT[2],
-  // });
-
   const booking = await bookingModel
     .findById(bookingCreated._id)
     .populate('userId', 'code userName email phone');
@@ -192,6 +146,7 @@ exports.bookingSlot = async (payload) => {
   return { data: booking };
 };
 
+//#region AssignSlot
 exports.autoAssignSlotForUpcomingBookings = async () => {
   const now = new Date();
   const after30Minutes = new Date(now.getTime() + 30 * 60 * 1000);
@@ -296,6 +251,7 @@ exports.autoAssignSlotForUpcomingBookings = async () => {
   return true;
 };
 
+//#region ReleaseUnCheckinBoking
 exports.releaseUncheckinBookings = async () => {
   const now = new Date();
 
@@ -316,15 +272,12 @@ exports.releaseUncheckinBookings = async () => {
       await slotModel.findByIdAndUpdate(slot._id, {
         status: 0,
         statusName: STATUS_SLOT[0],
-        reservedAt: null,
       });
 
       // 2. hủy booking
       await bookingModel.findByIdAndUpdate(booking._id, {
         status: 0,
         statusName: STATUS_BOOKING[0],
-        cancelReason: 'Không check-in sau 15 phút',
-        cancelledAt: new Date(),
       });
 
       await notificationService.createNotification({
@@ -332,9 +285,6 @@ exports.releaseUncheckinBookings = async () => {
         title: 'Booking bị hủy',
         message: 'Bạn đã không check-in sau 15 phút',
         type: 'BOOKING_TIMEOUT',
-        metadata: {
-          bookingId: booking._id,
-        },
       });
     }
   }
@@ -342,6 +292,7 @@ exports.releaseUncheckinBookings = async () => {
   return true;
 };
 
+//#region Cancel Booking
 exports.cancelBooking = async (bookingCode, userCode) => {
   if (!bookingCode || !userCode) {
     throw new Error('Thiếu thông tin booking hoặc user');

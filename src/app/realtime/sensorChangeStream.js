@@ -1,9 +1,9 @@
 const sensorModel = require('../models/sensor.model');
 const sensorService = require('../module/admin/iot/sensor/sensor.service');
 
-const {
-  assignSlotToSession,
-} = require('../module/admin/iot/sensor/sensor.service');
+// const {
+//   assignSlotToSession,
+// } = require('../module/admin/iot/sensor/sensor.service');
 
 let sensorChangeStream = null;
 
@@ -41,9 +41,9 @@ const startSensorChangeStream = () => {
 
       await sensorService.handleSensorChange(sensor);
 
-      if (sensor.isActive === 1) {
-        await assignSlotToSession({ slotId: sensor.slotId });
-      }
+      // if (sensor.isActive === 1) {
+      //   await assignSlotToSession({ slotId: sensor.slotId });
+      // }
     } catch (error) {
       console.error(
         '[change-stream] failed to process sensor update',
