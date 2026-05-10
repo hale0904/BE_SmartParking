@@ -273,6 +273,32 @@ exports.handleParkingSession = async (licensePlate) => {
   // CASE 2: XE VÀO
   // =========================
 
+  // =========================
+  // FULL BÃI
+  // =========================
+  const slot = await slotModel.findOne({ status: { $in: [0, 2] } });
+  if (!slot) {
+    throw new Error('Bãi đã đầy, không cho xe vào');
+  }
+
+  // =========================
+  // CHECK SLOT VÀNG CỦA USER
+  // =========================
+  const yellowSlot = await slotModel.findOne({
+    status: 2,
+  });
+
+  if (yellowSlot) {
+    const hasBookingSlot = await bookingModel.exists({
+      slotId: yellowSlot._id,
+      userId,
+    });
+
+    if (!hasBookingSlot) {
+      throw new Error('Bạn không có vị trí đặt trước');
+    }
+  }
+
   if (booking) {
     // =========================
     // RELEASE SLOT HOLDING
