@@ -82,22 +82,35 @@ exports.bookingSlot = async (payload) => {
     throw new Error('Thời gian đặt phải sau 30 phút và trước 10 ngày');
   }
 
-  const FOUR_HOURS = 4 * 60 * 60 * 1000;
+  // ==============================
+  // KHÔNG CHO BOOKING 23H -> 5H
+  // ==============================
+  const hour = timeNext.getHours();
 
-  const startTime = new Date(timeNext.getTime() - FOUR_HOURS);
-  const endTime = new Date(timeNext.getTime() + FOUR_HOURS);
+  if (hour >= 23 || hour < 5) {
+    throw new Error('Không được đặt chỗ từ 23h đến 5h');
+  }
+
+  // ==============================
+  // MỖI NGÀY CHỈ 1 BOOKING / USER
+  // ==============================
+  const startOfDay = new Date(timeNext);
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const endOfDay = new Date(timeNext);
+  endOfDay.setHours(23, 59, 59, 999);
 
   const conflictBooking = await bookingModel.findOne({
     userId: user._id,
     status: { $in: [1, 2] },
     expectedArrivalTime: {
-      $gte: startTime,
-      $lte: endTime,
+      $gte: startOfDay,
+      $lte: endOfDay,
     },
   });
 
   if (conflictBooking) {
-    throw new Error('Mỗi lần đặt phải cách nhau ít nhất 4 tiếng');
+    throw new Error('Mỗi ngày chỉ được đặt 1 lần');
   }
 
   const lastItem = await bookingModel
