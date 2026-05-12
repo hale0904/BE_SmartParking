@@ -3,20 +3,16 @@ const categoryIotModel = require('../../../../models/categoryIot.model');
 const parkingSessionModel = require('../../../../models/parkingSession.model');
 const sensorModel = require('../../../../models/sensor.model');
 const slotModel = require('../../../../models/slot.model');
-const { emitSlotUpdate } = require('../../../../socket/socket');
+const {
+  emitSlotStatusUpdate,
+  updateSlotStatus,
+} = require('../../../../service/slot-status.service');
 
 const STATUS_BOOKING = {
   0: 'Da huy',
   1: 'Da gan vi tri',
   2: 'Dat truoc',
   3: 'Da hoan thanh',
-};
-
-const STATUS_SLOT = {
-  0: 'Vi tri trống',
-  1: 'Vi tri có xe',
-  2: 'Vi tri đặt trước',
-  3: 'Vi tri loi/Vi tri dang chinh sua',
 };
 
 const logSlotUpdateEmission = (slot, sensor, source) => {
@@ -32,19 +28,8 @@ const logSlotUpdateEmission = (slot, sensor, source) => {
 const emitSlotStatusIfChanged = async (slot, nextStatus, meta = {}) => {
   if (!slot || slot.status === nextStatus) return false;
 
-  slot.status = nextStatus;
-  slot.statusName = STATUS_SLOT[nextStatus];
-  await slot.save();
+  await updateSlotStatus(slot, nextStatus, meta);
   logSlotUpdateEmission(slot, meta, meta.source || 'sensor');
-
-  emitSlotUpdate({
-    slotId: slot._id,
-    slotCode: slot.code,
-    slotStatus: nextStatus,
-    sensorId: meta.sensorId || null,
-    sensorCode: meta.sensorCode || null,
-    source: meta.source || 'sensor',
-  });
 
   return true;
 };
@@ -67,13 +52,12 @@ exports.getListSensor = async (keyword) => {
 };
 
 exports.updateSensor = async (payload) => {
-  const { code, categoryCode, isOnline, isActive } = payload;
+  const { code, categoryCode, isOnline } = payload;
 
-  // CREATE
   if (!code || Number(code) === 0) {
     const category = await categoryIotModel.findOne({ code: categoryCode });
     if (!category) {
-      throw new Error('Loại thiết bị không tồn tại');
+      throw new Error('Loai thiet bi khong ton tai');
     }
 
     const lastItem = await sensorModel
@@ -101,17 +85,16 @@ exports.updateSensor = async (payload) => {
     return { isCreate: true, data: sensorCreate };
   }
 
-  // UPDATE
   const sensors = await sensorModel.findOne({ code });
-  if (!sensors) throw new Error('Thiết bị không tồn tại');
+  if (!sensors) throw new Error('Thiet bi khong ton tai');
   if (categoryCode !== undefined) {
     const category = await categoryIotModel.findOne({ code: categoryCode });
-    if (!category) throw new Error('Loại thiết bị không tồn tại');
+    if (!category) throw new Error('Loai thiet bi khong ton tai');
     sensors.categoryId = category._id;
   }
 
   if (isOnline === null || isOnline === undefined) {
-    throw new Error('Trạng thái online không hợp lệ');
+    throw new Error('Trang thai online khong hop le');
   } else {
     sensors.isOnline = isOnline;
   }
@@ -122,7 +105,7 @@ exports.updateSensor = async (payload) => {
 
 exports.deleteSensor = async (items = []) => {
   if (!Array.isArray(items) || items.length === 0) {
-    throw new Error('Danh sách thiết bị không hợp lệ');
+    throw new Error('Danh sach thiet bi khong hop le');
   }
 
   const codes = items
@@ -130,7 +113,7 @@ exports.deleteSensor = async (items = []) => {
     .filter((code) => typeof code === 'string' && code.trim() !== '');
 
   if (codes.length === 0) {
-    throw new Error('Không tìm thấy mã thiết bị hợp lệ');
+    throw new Error('Khong tim thay ma thiet bi hop le');
   }
 
   const sensors = await sensorModel.find({
@@ -138,34 +121,25 @@ exports.deleteSensor = async (items = []) => {
   });
 
   if (sensors.length === 0) {
-    throw new Error('Thiết bị không tồn tại');
+    throw new Error('Thiet bi khong ton tai');
   }
 
-  // =========================
-  // CHECK thiếu code
-  // =========================
   if (sensors.length !== codes.length) {
     const foundCodes = sensors.map((s) => s.code);
     const missingCodes = codes.filter((c) => !foundCodes.includes(c));
 
-    throw new Error(`Thiết bị không tồn tại: ${missingCodes.join(', ')}`);
+    throw new Error(`Thiet bi khong ton tai: ${missingCodes.join(', ')}`);
   }
 
-  // =========================
-  //  NEW: CHECK SLOT
-  // =========================
   const lockedSensors = sensors.filter((s) => s.slotId !== null);
 
   if (lockedSensors.length > 0) {
     const lockedCodes = lockedSensors.map((s) => s.code);
     throw new Error(
-      `Không thể xoá thiết bị đang gắn slot: ${lockedCodes.join(', ')}`
+      `Khong the xoa thiet bi dang gan slot: ${lockedCodes.join(', ')}`
     );
   }
 
-  // =========================
-  // DELETE
-  // =========================
   const sensorIds = sensors.map((s) => s._id);
   const result = await sensorModel.deleteMany({
     _id: { $in: sensorIds },
@@ -198,45 +172,33 @@ exports.handleSensorChange = async (sensor) => {
     sensorId: sensor._id,
     sensorCode: sensor.code,
   };
-  const now = new Date();
-  if (Number(sensor.isActive) === 1) {
-    // =========================
-    // SLOT -> OCCUPIED
-    // =========================
-    if (slot.status !== 1) {
-      slot.status = 1;
-      slot.statusName = STATUS_SLOT[1];
-      await slot.save();
-    }
+  const isActive = Number(sensor.isActive);
 
-    // =========================
-    // CHECK XE ĐÚNG BOOKING?
-    // =========================
-    const correctSession = await parkingSessionModel.findOne({
-      bookingId: booking._id,
-      status: 0,
+  if (isActive === 1) {
+    await updateSlotStatus(slot, 1, {
+      ...meta,
+      source: 'sensor-occupied',
     });
 
-    // =========================
-    // CASE 1: SLOT BỊ CHIẾM
-    // =========================
-    if (!correctSession) {
-      // tìm slot xanh khác
+    const correctSession = booking
+      ? await parkingSessionModel.findOne({
+          bookingId: booking._id,
+          status: 0,
+        })
+      : null;
+
+    if (booking && !correctSession) {
       const newSlot = await slotModel.findOne({
         status: 0,
         _id: { $ne: slot._id },
       });
 
       if (newSlot) {
-        // slot mới -> vàng
-        newSlot.status = 2;
-        newSlot.statusName = STATUS_SLOT[2];
+        await updateSlotStatus(newSlot, 2, {
+          source: 'booking-reassigned',
+        });
 
-        await newSlot.save();
-
-        // booking chuyển sang slot mới
         booking.slotId = newSlot._id;
-
         await booking.save();
 
         console.log(
@@ -247,57 +209,337 @@ exports.handleSensorChange = async (sensor) => {
         );
       }
 
-      await slot.save();
-
-      emitSlotUpdate({
-        slotId: slot._id,
-        slotCode: slot.code,
-        slotStatus: slot.status,
+      emitSlotStatusUpdate(slot, slot.status, {
         ...meta,
         source: 'slot-stolen',
       });
-
       return;
     }
 
-    // =========================
-    // CASE 2: ĐÚNG XE BOOKING
-    // =========================
-    if (booking.status === 2) {
+    if (booking && booking.status === 2) {
       booking.status = 1;
       booking.statusName = STATUS_BOOKING[1];
-
       await booking.save();
     }
 
-    await slot.save();
-
-    emitSlotUpdate({
-      slotId: slot._id,
-      slotCode: slot.code,
-      slotStatus: slot.status,
+    emitSlotStatusUpdate(slot, slot.status, {
       ...meta,
       source: 'booking-owner-arrived',
     });
-
     return;
   }
 
-  if (sensor.isActive === 1) {
-    await emitSlotStatusIfChanged(slot, 1, {
-      ...meta,
-      source: 'sensor-occupied',
-    });
-    return;
-  }
-
-  if (sensor.isActive === 0 && slot.status === 1) {
+  if (isActive === 0 && slot.status === 1) {
     await emitSlotStatusIfChanged(slot, 0, {
       ...meta,
       source: 'sensor-available',
     });
   }
 };
+
+// file cũ ngày 12/5
+// const bookingModel = require('../../../../models/booking.model');
+// const categoryIotModel = require('../../../../models/categoryIot.model');
+// const parkingSessionModel = require('../../../../models/parkingSession.model');
+// const sensorModel = require('../../../../models/sensor.model');
+// const slotModel = require('../../../../models/slot.model');
+// const { emitSlotUpdate } = require('../../../../socket/socket');
+
+// const STATUS_BOOKING = {
+//   0: 'Da huy',
+//   1: 'Da gan vi tri',
+//   2: 'Dat truoc',
+//   3: 'Da hoan thanh',
+// };
+
+// const STATUS_SLOT = {
+//   0: 'Vi tri trống',
+//   1: 'Vi tri có xe',
+//   2: 'Vi tri đặt trước',
+//   3: 'Vi tri loi/Vi tri dang chinh sua',
+// };
+
+// const logSlotUpdateEmission = (slot, sensor, source) => {
+//   console.log('[socket] emit slot:update', {
+//     slotId: slot?._id?.toString?.() || null,
+//     slotCode: slot?.code || null,
+//     slotStatus: slot?.status,
+//     sensorCode: sensor?.code || null,
+//     source,
+//   });
+// };
+
+// const emitSlotStatusIfChanged = async (slot, nextStatus, meta = {}) => {
+//   if (!slot || slot.status === nextStatus) return false;
+
+//   slot.status = nextStatus;
+//   slot.statusName = STATUS_SLOT[nextStatus];
+//   await slot.save();
+//   logSlotUpdateEmission(slot, meta, meta.source || 'sensor');
+
+//   emitSlotUpdate({
+//     slotId: slot._id,
+//     slotCode: slot.code,
+//     slotStatus: nextStatus,
+//     sensorId: meta.sensorId || null,
+//     sensorCode: meta.sensorCode || null,
+//     source: meta.source || 'sensor',
+//   });
+
+//   return true;
+// };
+
+// exports.getListSensor = async (keyword) => {
+//   const filter = {};
+
+//   if (keyword && keyword.trim() !== '') {
+//     const regex = new RegExp(keyword.trim(), 'i');
+//     filter.$or = [{ code: regex }];
+//   }
+
+//   const sensor = await sensorModel
+//     .find(filter)
+//     .select('code slotId isActive isOnline categoryId')
+//     .populate('categoryId', 'code name')
+//     .populate('slotId', 'code nameSlot');
+
+//   return sensor;
+// };
+
+// exports.updateSensor = async (payload) => {
+//   const { code, categoryCode, isOnline, isActive } = payload;
+
+//   // CREATE
+//   if (!code || Number(code) === 0) {
+//     const category = await categoryIotModel.findOne({ code: categoryCode });
+//     if (!category) {
+//       throw new Error('Loại thiết bị không tồn tại');
+//     }
+
+//     const lastItem = await sensorModel
+//       .findOne({ code: { $regex: /^SS\d+$/ } })
+//       .sort({ code: -1 })
+//       .select('code');
+
+//     let newNumber = 1;
+
+//     if (lastItem) {
+//       const currentNumber = parseInt(lastItem.code.replace('SS', ''), 10);
+//       newNumber = currentNumber + 1;
+//     }
+
+//     const newCode = `SS${String(newNumber).padStart(3, '0')}`;
+
+//     const sensorCreate = await sensorModel.create({
+//       code: newCode,
+//       slotId: null,
+//       isActive: 0,
+//       isOnline: false,
+//       categoryId: category._id,
+//     });
+
+//     return { isCreate: true, data: sensorCreate };
+//   }
+
+//   // UPDATE
+//   const sensors = await sensorModel.findOne({ code });
+//   if (!sensors) throw new Error('Thiết bị không tồn tại');
+//   if (categoryCode !== undefined) {
+//     const category = await categoryIotModel.findOne({ code: categoryCode });
+//     if (!category) throw new Error('Loại thiết bị không tồn tại');
+//     sensors.categoryId = category._id;
+//   }
+
+//   if (isOnline === null || isOnline === undefined) {
+//     throw new Error('Trạng thái online không hợp lệ');
+//   } else {
+//     sensors.isOnline = isOnline;
+//   }
+//   await sensors.save();
+
+//   return { isCreate: false, data: sensors };
+// };
+
+// exports.deleteSensor = async (items = []) => {
+//   if (!Array.isArray(items) || items.length === 0) {
+//     throw new Error('Danh sách thiết bị không hợp lệ');
+//   }
+
+//   const codes = items
+//     .map((item) => (typeof item === 'string' ? item : item.code))
+//     .filter((code) => typeof code === 'string' && code.trim() !== '');
+
+//   if (codes.length === 0) {
+//     throw new Error('Không tìm thấy mã thiết bị hợp lệ');
+//   }
+
+//   const sensors = await sensorModel.find({
+//     code: { $in: codes },
+//   });
+
+//   if (sensors.length === 0) {
+//     throw new Error('Thiết bị không tồn tại');
+//   }
+
+//   // =========================
+//   // CHECK thiếu code
+//   // =========================
+//   if (sensors.length !== codes.length) {
+//     const foundCodes = sensors.map((s) => s.code);
+//     const missingCodes = codes.filter((c) => !foundCodes.includes(c));
+
+//     throw new Error(`Thiết bị không tồn tại: ${missingCodes.join(', ')}`);
+//   }
+
+//   // =========================
+//   //  NEW: CHECK SLOT
+//   // =========================
+//   const lockedSensors = sensors.filter((s) => s.slotId !== null);
+
+//   if (lockedSensors.length > 0) {
+//     const lockedCodes = lockedSensors.map((s) => s.code);
+//     throw new Error(
+//       `Không thể xoá thiết bị đang gắn slot: ${lockedCodes.join(', ')}`
+//     );
+//   }
+
+//   // =========================
+//   // DELETE
+//   // =========================
+//   const sensorIds = sensors.map((s) => s._id);
+//   const result = await sensorModel.deleteMany({
+//     _id: { $in: sensorIds },
+//   });
+
+//   return {
+//     deletedCount: result.deletedCount,
+//   };
+// };
+
+// exports.handleSensorChange = async (sensor) => {
+//   console.log('[sensor] handleSensorChange', {
+//     sensorCode: sensor?.code,
+//     sensorId: sensor?._id?.toString?.() || null,
+//     slotId: sensor?.slotId?.toString?.() || null,
+//     isActive: sensor?.isActive,
+//   });
+
+//   if (!sensor?.slotId) return;
+
+//   const slot = await slotModel.findById(sensor.slotId);
+//   if (!slot) return;
+
+//   const booking = await bookingModel.findOne({
+//     slotId: slot._id,
+//     status: { $in: [1, 2] },
+//   });
+
+//   const meta = {
+//     sensorId: sensor._id,
+//     sensorCode: sensor.code,
+//   };
+//   const now = new Date();
+//   if (Number(sensor.isActive) === 1) {
+//     // =========================
+//     // SLOT -> OCCUPIED
+//     // =========================
+//     if (slot.status !== 1) {
+//       slot.status = 1;
+//       slot.statusName = STATUS_SLOT[1];
+//       await slot.save();
+//     }
+
+//     // =========================
+//     // CHECK XE ĐÚNG BOOKING?
+//     // =========================
+//     const correctSession = await parkingSessionModel.findOne({
+//       bookingId: booking._id,
+//       status: 0,
+//     });
+
+//     // =========================
+//     // CASE 1: SLOT BỊ CHIẾM
+//     // =========================
+//     if (!correctSession) {
+//       // tìm slot xanh khác
+//       const newSlot = await slotModel.findOne({
+//         status: 0,
+//         _id: { $ne: slot._id },
+//       });
+
+//       if (newSlot) {
+//         // slot mới -> vàng
+//         newSlot.status = 2;
+//         newSlot.statusName = STATUS_SLOT[2];
+
+//         await newSlot.save();
+
+//         // booking chuyển sang slot mới
+//         booking.slotId = newSlot._id;
+
+//         await booking.save();
+
+//         console.log(
+//           '[BOOKING] slot reassigned',
+//           booking.code,
+//           '=>',
+//           newSlot.code
+//         );
+//       }
+
+//       await slot.save();
+
+//       emitSlotUpdate({
+//         slotId: slot._id,
+//         slotCode: slot.code,
+//         slotStatus: slot.status,
+//         ...meta,
+//         source: 'slot-stolen',
+//       });
+
+//       return;
+//     }
+
+//     // =========================
+//     // CASE 2: ĐÚNG XE BOOKING
+//     // =========================
+//     if (booking.status === 2) {
+//       booking.status = 1;
+//       booking.statusName = STATUS_BOOKING[1];
+
+//       await booking.save();
+//     }
+
+//     await slot.save();
+
+//     emitSlotUpdate({
+//       slotId: slot._id,
+//       slotCode: slot.code,
+//       slotStatus: slot.status,
+//       ...meta,
+//       source: 'booking-owner-arrived',
+//     });
+
+//     return;
+//   }
+
+//   if (sensor.isActive === 1) {
+//     await emitSlotStatusIfChanged(slot, 1, {
+//       ...meta,
+//       source: 'sensor-occupied',
+//     });
+//     return;
+//   }
+
+//   if (sensor.isActive === 0 && slot.status === 1) {
+//     await emitSlotStatusIfChanged(slot, 0, {
+//       ...meta,
+//       source: 'sensor-available',
+//     });
+//   }
+// };
+
+// ========================= file cũ
 
 // const parkingSessionModel = require('../../../../models/parkingSession.model');
 

@@ -7,31 +7,25 @@ const userModel = require('../../../models/user.model');
 const vehiclesModel = require('../../../models/vehicles.model');
 const zoneModel = require('../../../models/zone.model');
 const notificationService = require('../notification/notification.service');
+const { updateSlotStatus } = require('../../../service/slot-status.service');
 
 const STATUS_BOOKING = {
-  0: 'Đã hủy',
-  1: 'Đã gán vị trí',
-  2: 'Đặt trước',
-  3: 'Đã hoàn thành',
+  0: 'Da huy',
+  1: 'Da gan vi tri',
+  2: 'Dat truoc',
+  3: 'Da hoan thanh',
 };
 
-const STATUS_SLOT = {
-  0: 'Vị trí trống',
-  1: 'Vị trí có xe',
-  2: 'Vị trí đặt trước',
-  3: 'Vị trí lỗi/ Vị trí đang chỉnh sửa',
-};
-
-//#region Get List Booking
+// #region Get List Booking
 exports.getListBooking = async (status, keyword, userId) => {
   if (!userId) {
-    throw new Error('Thiếu mã của người dùng');
+    throw new Error('Thieu ma cua nguoi dung');
   }
 
   const user = await userModel.findOne({ code: userId });
 
   if (!user) {
-    throw new Error('Người dùng không hợp lệ');
+    throw new Error('Nguoi dung khong hop le');
   }
 
   const filter = { userId: user._id };
@@ -42,7 +36,6 @@ exports.getListBooking = async (status, keyword, userId) => {
 
   if (keyword && keyword.trim() !== '') {
     const regex = new RegExp(keyword.trim(), 'i');
-
     filter.$or = [{ licensePlate: regex }];
   }
 
@@ -58,42 +51,36 @@ exports.getListBooking = async (status, keyword, userId) => {
   return booking;
 };
 
-//#region Booking
+// #region Booking
 exports.bookingSlot = async (payload) => {
   const { userId, vehiclesId, expectedArrivalTime, status } = payload;
 
   if (!userId || !vehiclesId || !expectedArrivalTime) {
-    throw new Error('Thiếu thông tin đặt chỗ');
+    throw new Error('Thieu thong tin dat cho');
   }
 
   const user = await userModel.findOne({ code: userId });
   const vehicle = await vehiclesModel.findOne({ code: vehiclesId });
 
-  if (!user) throw new Error('User không tồn tại');
-  if (!vehicle) throw new Error('Xe không tồn tại');
+  if (!user) throw new Error('User khong ton tai');
+  if (!vehicle) throw new Error('Xe khong ton tai');
 
   const timeNow = new Date();
   const timeNext = new Date(expectedArrivalTime);
 
-  const minTime = new Date(timeNow.getTime() + 30 * 60 * 1000); // sau 30 phút
-  const maxTime = new Date(timeNow.getTime() + 10 * 24 * 60 * 60 * 1000); // trước 10 ngày
+  const minTime = new Date(timeNow.getTime() + 30 * 60 * 1000);
+  const maxTime = new Date(timeNow.getTime() + 10 * 24 * 60 * 60 * 1000);
 
   if (timeNext < minTime || timeNext > maxTime) {
-    throw new Error('Thời gian đặt phải sau 30 phút và trước 10 ngày');
+    throw new Error('Thoi gian dat phai sau 30 phut va truoc 10 ngay');
   }
 
-  // ==============================
-  // KHÔNG CHO BOOKING 23H -> 5H
-  // ==============================
   const hour = timeNext.getHours();
 
   if (hour >= 23 || hour < 5) {
-    throw new Error('Không được đặt chỗ từ 23h đến 5h');
+    throw new Error('Khong duoc dat cho tu 23h den 5h');
   }
 
-  // ==============================
-  // MỖI NGÀY CHỈ 1 BOOKING / USER
-  // ==============================
   const startOfDay = new Date(timeNext);
   startOfDay.setHours(0, 0, 0, 0);
 
@@ -110,7 +97,7 @@ exports.bookingSlot = async (payload) => {
   });
 
   if (conflictBooking) {
-    throw new Error('Mỗi ngày chỉ được đặt 1 lần');
+    throw new Error('Moi ngay chi duoc dat 1 lan');
   }
 
   const lastItem = await bookingModel
@@ -143,8 +130,8 @@ exports.bookingSlot = async (payload) => {
 
   await notificationService.createNotification({
     userId: user._id,
-    title: 'Đặt chỗ thành công',
-    message: `Bạn đã đặt chỗ lúc ${new Date(expectedArrivalTime).toLocaleString()}`,
+    title: 'Dat cho thanh cong',
+    message: `Ban da dat cho luc ${new Date(expectedArrivalTime).toLocaleString()}`,
     type: 'BOOKING',
     metadata: {
       bookingId: bookingCreated._id,
@@ -159,7 +146,7 @@ exports.bookingSlot = async (payload) => {
   return { data: booking };
 };
 
-//#region AssignSlot
+// #region AssignSlot
 exports.autoAssignSlotForUpcomingBookings = async () => {
   const now = new Date();
   const after30Minutes = new Date(now.getTime() + 30 * 60 * 1000);
@@ -167,7 +154,7 @@ exports.autoAssignSlotForUpcomingBookings = async () => {
   const parking = await parkingModel.findOne({ code: 'PK001' });
 
   if (!parking) {
-    throw new Error('Không tìm thấy bãi xe');
+    throw new Error('Khong tim thay bai xe');
   }
 
   const floors = await floorModel
@@ -198,30 +185,25 @@ exports.autoAssignSlotForUpcomingBookings = async () => {
 
   const bookings = await bookingModel.find({
     slotId: null,
-    status: 2, // Đặc trước
+    status: 2,
     expectedArrivalTime: {
       $lte: after30Minutes,
     },
   });
 
   for (const booking of bookings) {
-    const emptySlot = await slotModel.findOneAndUpdate(
-      {
+    const emptySlot = await slotModel
+      .findOne({
         groupSlotCode: { $in: groupIds },
         status: 0,
-      },
-      {
-        status: 2,
-        statusName: STATUS_SLOT[2],
-      },
-      {
-        new: true,
-        sort: { createdAt: 1 },
-      }
-    );
+      })
+      .sort({ createdAt: 1 });
 
-    // nếu có slot thì assign
     if (emptySlot) {
+      await updateSlotStatus(emptySlot, 2, {
+        source: 'booking-assigned',
+      });
+
       await bookingModel.findByIdAndUpdate(booking._id, {
         slotId: emptySlot._id,
         status: 1,
@@ -229,9 +211,9 @@ exports.autoAssignSlotForUpcomingBookings = async () => {
       });
 
       await notificationService.createNotification({
-        userId: booking.userId._id,
-        title: 'Đã giữ chỗ',
-        message: 'Slot của bạn đã được giữ, vui lòng đến đúng giờ',
+        userId: booking.userId,
+        title: 'Da giu cho',
+        message: 'Slot cua ban da duoc giu, vui long den dung gio',
         type: 'BOOKING_ASSIGNED',
         metadata: {
           bookingId: booking._id,
@@ -240,19 +222,18 @@ exports.autoAssignSlotForUpcomingBookings = async () => {
       });
     }
 
-    // nếu không còn slot và đã đến giờ hoặc quá giờ thì tự hủy
     if (new Date(booking.expectedArrivalTime) <= now) {
       await bookingModel.findByIdAndUpdate(booking._id, {
-        status: 0, // hủy
+        status: 0,
         statusName: STATUS_BOOKING[0],
-        cancelReason: 'Hết chỗ trống',
+        cancelReason: 'Het cho trong',
         cancelledAt: new Date(),
       });
 
       await notificationService.createNotification({
-        userId: booking.userId._id,
-        title: 'Booking bị hủy',
-        message: 'Bãi xe đã hết chỗ',
+        userId: booking.userId,
+        title: 'Booking bi huy',
+        message: 'Bai xe da het cho',
         type: 'BOOKING_CANCEL',
         metadata: {
           bookingId: booking._id,
@@ -264,39 +245,35 @@ exports.autoAssignSlotForUpcomingBookings = async () => {
   return true;
 };
 
-//#region ReleaseUnCheckinBoking
+// #region ReleaseUnCheckinBoking
 exports.releaseUncheckinBookings = async () => {
   const now = new Date();
 
   const expiredBookings = await bookingModel.find({
-    status: 1, // đã được gán slot
+    status: 1,
     slotId: { $ne: null },
     expectedArrivalTime: {
-      $lte: new Date(now.getTime() - 15 * 60 * 1000), // quá 15p
+      $lte: new Date(now.getTime() - 15 * 60 * 1000),
     },
   });
 
   for (const booking of expiredBookings) {
     const slot = await slotModel.findById(booking.slotId);
 
-    // chỉ xử lý nếu slot vẫn chưa có xe
     if (slot && slot.status !== 1) {
-      // 1. trả slot về trống
-      await slotModel.findByIdAndUpdate(slot._id, {
-        status: 0,
-        statusName: STATUS_SLOT[0],
+      await updateSlotStatus(slot, 0, {
+        source: 'booking-timeout-release',
       });
 
-      // 2. hủy booking
       await bookingModel.findByIdAndUpdate(booking._id, {
         status: 0,
         statusName: STATUS_BOOKING[0],
       });
 
       await notificationService.createNotification({
-        userId: booking.userId._id,
-        title: 'Booking bị hủy',
-        message: 'Bạn đã không check-in sau 15 phút',
+        userId: booking.userId,
+        title: 'Booking bi huy',
+        message: 'Ban da khong check-in sau 15 phut',
         type: 'BOOKING_TIMEOUT',
       });
     }
@@ -305,16 +282,16 @@ exports.releaseUncheckinBookings = async () => {
   return true;
 };
 
-//#region Cancel Booking
+// #region Cancel Booking
 exports.cancelBooking = async (bookingCode, userCode) => {
   if (!bookingCode || !userCode) {
-    throw new Error('Thiếu thông tin booking hoặc user');
+    throw new Error('Thieu thong tin booking hoac user');
   }
 
   const user = await userModel.findOne({ code: userCode });
 
   if (!user) {
-    throw new Error('Người dùng không tồn tại');
+    throw new Error('Nguoi dung khong ton tai');
   }
 
   const booking = await bookingModel.findOne({
@@ -323,39 +300,396 @@ exports.cancelBooking = async (bookingCode, userCode) => {
   });
 
   if (!booking) {
-    throw new Error('Không tìm thấy booking');
+    throw new Error('Khong tim thay booking');
   }
 
-  // đã hủy hoặc đã hoàn thành thì không được hủy nữa
   if ([0, 3].includes(booking.status)) {
-    throw new Error('Booking này không thể hủy');
+    throw new Error('Booking nay khong the huy');
   }
 
-  // nếu đã được gán vị trí thì trả slot về trống
   if (booking.slotId) {
-    await slotModel.findByIdAndUpdate(booking.slotId, {
-      status: 0,
-      statusName: STATUS_SLOT[0],
+    await updateSlotStatus(booking.slotId, 0, {
+      source: 'booking-cancelled',
     });
   }
 
   await bookingModel.findByIdAndUpdate(booking._id, {
     status: 0,
     statusName: STATUS_BOOKING[0],
-    cancelReason: 'Người dùng tự hủy',
+    cancelReason: 'Nguoi dung tu huy',
     cancelledAt: new Date(),
     slotId: null,
   });
 
   await notificationService.createNotification({
     userId: booking.userId,
-    title: 'Đã hủy booking',
-    message: `Bạn đã hủy booking ${booking.code}`,
+    title: 'Da huy booking',
+    message: `Ban da huy booking ${booking.code}`,
     type: 'BOOKING_CANCEL',
     metadata: {
       bookingId: booking._id,
     },
   });
-
-  return;
 };
+
+// const bookingModel = require('../../../models/booking.model');
+// const floorModel = require('../../../models/floor.model');
+// const groupSlotModel = require('../../../models/groupSlot.model');
+// const parkingModel = require('../../../models/parking.model');
+// const slotModel = require('../../../models/slot.model');
+// const userModel = require('../../../models/user.model');
+// const vehiclesModel = require('../../../models/vehicles.model');
+// const zoneModel = require('../../../models/zone.model');
+// const notificationService = require('../notification/notification.service');
+
+// const STATUS_BOOKING = {
+//   0: 'Đã hủy',
+//   1: 'Đã gán vị trí',
+//   2: 'Đặt trước',
+//   3: 'Đã hoàn thành',
+// };
+
+// const STATUS_SLOT = {
+//   0: 'Vị trí trống',
+//   1: 'Vị trí có xe',
+//   2: 'Vị trí đặt trước',
+//   3: 'Vị trí lỗi/ Vị trí đang chỉnh sửa',
+// };
+
+// //#region Get List Booking
+// exports.getListBooking = async (status, keyword, userId) => {
+//   if (!userId) {
+//     throw new Error('Thiếu mã của người dùng');
+//   }
+
+//   const user = await userModel.findOne({ code: userId });
+
+//   if (!user) {
+//     throw new Error('Người dùng không hợp lệ');
+//   }
+
+//   const filter = { userId: user._id };
+
+//   if (status !== undefined && status !== null && status !== '') {
+//     filter.status = Number(status);
+//   }
+
+//   if (keyword && keyword.trim() !== '') {
+//     const regex = new RegExp(keyword.trim(), 'i');
+
+//     filter.$or = [{ licensePlate: regex }];
+//   }
+
+//   const booking = await bookingModel
+//     .find(filter)
+//     .select(
+//       'code vehiclesId slotId userId status statusName licensePlate expectedArrivalTime'
+//     )
+//     .populate('slotId', 'code nameSlot')
+//     .populate('userId', 'code userName email phone')
+//     .populate('vehiclesId', 'code nameVehicles');
+
+//   return booking;
+// };
+
+// //#region Booking
+// exports.bookingSlot = async (payload) => {
+//   const { userId, vehiclesId, expectedArrivalTime, status } = payload;
+
+//   if (!userId || !vehiclesId || !expectedArrivalTime) {
+//     throw new Error('Thiếu thông tin đặt chỗ');
+//   }
+
+//   const user = await userModel.findOne({ code: userId });
+//   const vehicle = await vehiclesModel.findOne({ code: vehiclesId });
+
+//   if (!user) throw new Error('User không tồn tại');
+//   if (!vehicle) throw new Error('Xe không tồn tại');
+
+//   const timeNow = new Date();
+//   const timeNext = new Date(expectedArrivalTime);
+
+//   const minTime = new Date(timeNow.getTime() + 30 * 60 * 1000); // sau 30 phút
+//   const maxTime = new Date(timeNow.getTime() + 10 * 24 * 60 * 60 * 1000); // trước 10 ngày
+
+//   if (timeNext < minTime || timeNext > maxTime) {
+//     throw new Error('Thời gian đặt phải sau 30 phút và trước 10 ngày');
+//   }
+
+//   // ==============================
+//   // KHÔNG CHO BOOKING 23H -> 5H
+//   // ==============================
+//   const hour = timeNext.getHours();
+
+//   if (hour >= 23 || hour < 5) {
+//     throw new Error('Không được đặt chỗ từ 23h đến 5h');
+//   }
+
+//   // ==============================
+//   // MỖI NGÀY CHỈ 1 BOOKING / USER
+//   // ==============================
+//   const startOfDay = new Date(timeNext);
+//   startOfDay.setHours(0, 0, 0, 0);
+
+//   const endOfDay = new Date(timeNext);
+//   endOfDay.setHours(23, 59, 59, 999);
+
+//   const conflictBooking = await bookingModel.findOne({
+//     userId: user._id,
+//     status: { $in: [1, 2] },
+//     expectedArrivalTime: {
+//       $gte: startOfDay,
+//       $lte: endOfDay,
+//     },
+//   });
+
+//   if (conflictBooking) {
+//     throw new Error('Mỗi ngày chỉ được đặt 1 lần');
+//   }
+
+//   const lastItem = await bookingModel
+//     .findOne({ code: { $regex: /^BK\d+$/ } })
+//     .sort({ code: -1 })
+//     .select('code');
+
+//   let newNumber = 1;
+
+//   if (lastItem) {
+//     const currentNumber = parseInt(lastItem.code.replace('BK', ''), 10);
+//     newNumber = currentNumber + 1;
+//   }
+
+//   const newCode = `BK${String(newNumber).padStart(3, '0')}`;
+
+//   const finalStatus =
+//     status !== undefined && status !== null ? Number(status) : 2;
+
+//   const bookingCreated = await bookingModel.create({
+//     code: newCode,
+//     userId: user._id,
+//     slotId: null,
+//     vehiclesId: vehicle._id,
+//     expectedArrivalTime,
+//     status: finalStatus,
+//     statusName: STATUS_BOOKING[finalStatus],
+//     licensePlate: vehicle.licensePlate,
+//   });
+
+//   await notificationService.createNotification({
+//     userId: user._id,
+//     title: 'Đặt chỗ thành công',
+//     message: `Bạn đã đặt chỗ lúc ${new Date(expectedArrivalTime).toLocaleString()}`,
+//     type: 'BOOKING',
+//     metadata: {
+//       bookingId: bookingCreated._id,
+//       bookingCode: bookingCreated.code,
+//     },
+//   });
+
+//   const booking = await bookingModel
+//     .findById(bookingCreated._id)
+//     .populate('userId', 'code userName email phone');
+
+//   return { data: booking };
+// };
+
+// //#region AssignSlot
+// exports.autoAssignSlotForUpcomingBookings = async () => {
+//   const now = new Date();
+//   const after30Minutes = new Date(now.getTime() + 30 * 60 * 1000);
+
+//   const parking = await parkingModel.findOne({ code: 'PK001' });
+
+//   if (!parking) {
+//     throw new Error('Không tìm thấy bãi xe');
+//   }
+
+//   const floors = await floorModel
+//     .find({
+//       parkingCode: parking._id,
+//       status: 1,
+//     })
+//     .select('_id');
+
+//   const floorIds = floors.map((item) => item._id);
+
+//   const zones = await zoneModel
+//     .find({
+//       floorCode: { $in: floorIds },
+//       status: 1,
+//     })
+//     .select('_id');
+
+//   const zoneIds = zones.map((item) => item._id);
+
+//   const groups = await groupSlotModel
+//     .find({
+//       zoneCode: { $in: zoneIds },
+//     })
+//     .select('_id');
+
+//   const groupIds = groups.map((item) => item._id);
+
+//   const bookings = await bookingModel.find({
+//     slotId: null,
+//     status: 2, // Đặc trước
+//     expectedArrivalTime: {
+//       $lte: after30Minutes,
+//     },
+//   });
+
+//   for (const booking of bookings) {
+//     const emptySlot = await slotModel.findOneAndUpdate(
+//       {
+//         groupSlotCode: { $in: groupIds },
+//         status: 0,
+//       },
+//       {
+//         status: 2,
+//         statusName: STATUS_SLOT[2],
+//       },
+//       {
+//         new: true,
+//         sort: { createdAt: 1 },
+//       }
+//     );
+
+//     // nếu có slot thì assign
+//     if (emptySlot) {
+//       await bookingModel.findByIdAndUpdate(booking._id, {
+//         slotId: emptySlot._id,
+//         status: 1,
+//         statusName: STATUS_BOOKING[1],
+//       });
+
+//       await notificationService.createNotification({
+//         userId: booking.userId._id,
+//         title: 'Đã giữ chỗ',
+//         message: 'Slot của bạn đã được giữ, vui lòng đến đúng giờ',
+//         type: 'BOOKING_ASSIGNED',
+//         metadata: {
+//           bookingId: booking._id,
+//           slotId: emptySlot._id,
+//         },
+//       });
+//     }
+
+//     // nếu không còn slot và đã đến giờ hoặc quá giờ thì tự hủy
+//     if (new Date(booking.expectedArrivalTime) <= now) {
+//       await bookingModel.findByIdAndUpdate(booking._id, {
+//         status: 0, // hủy
+//         statusName: STATUS_BOOKING[0],
+//         cancelReason: 'Hết chỗ trống',
+//         cancelledAt: new Date(),
+//       });
+
+//       await notificationService.createNotification({
+//         userId: booking.userId._id,
+//         title: 'Booking bị hủy',
+//         message: 'Bãi xe đã hết chỗ',
+//         type: 'BOOKING_CANCEL',
+//         metadata: {
+//           bookingId: booking._id,
+//         },
+//       });
+//     }
+//   }
+
+//   return true;
+// };
+
+// //#region ReleaseUnCheckinBoking
+// exports.releaseUncheckinBookings = async () => {
+//   const now = new Date();
+
+//   const expiredBookings = await bookingModel.find({
+//     status: 1, // đã được gán slot
+//     slotId: { $ne: null },
+//     expectedArrivalTime: {
+//       $lte: new Date(now.getTime() - 15 * 60 * 1000), // quá 15p
+//     },
+//   });
+
+//   for (const booking of expiredBookings) {
+//     const slot = await slotModel.findById(booking.slotId);
+
+//     // chỉ xử lý nếu slot vẫn chưa có xe
+//     if (slot && slot.status !== 1) {
+//       // 1. trả slot về trống
+//       await slotModel.findByIdAndUpdate(slot._id, {
+//         status: 0,
+//         statusName: STATUS_SLOT[0],
+//       });
+
+//       // 2. hủy booking
+//       await bookingModel.findByIdAndUpdate(booking._id, {
+//         status: 0,
+//         statusName: STATUS_BOOKING[0],
+//       });
+
+//       await notificationService.createNotification({
+//         userId: booking.userId._id,
+//         title: 'Booking bị hủy',
+//         message: 'Bạn đã không check-in sau 15 phút',
+//         type: 'BOOKING_TIMEOUT',
+//       });
+//     }
+//   }
+
+//   return true;
+// };
+
+// //#region Cancel Booking
+// exports.cancelBooking = async (bookingCode, userCode) => {
+//   if (!bookingCode || !userCode) {
+//     throw new Error('Thiếu thông tin booking hoặc user');
+//   }
+
+//   const user = await userModel.findOne({ code: userCode });
+
+//   if (!user) {
+//     throw new Error('Người dùng không tồn tại');
+//   }
+
+//   const booking = await bookingModel.findOne({
+//     code: bookingCode,
+//     userId: user._id,
+//   });
+
+//   if (!booking) {
+//     throw new Error('Không tìm thấy booking');
+//   }
+
+//   // đã hủy hoặc đã hoàn thành thì không được hủy nữa
+//   if ([0, 3].includes(booking.status)) {
+//     throw new Error('Booking này không thể hủy');
+//   }
+
+//   // nếu đã được gán vị trí thì trả slot về trống
+//   if (booking.slotId) {
+//     await slotModel.findByIdAndUpdate(booking.slotId, {
+//       status: 0,
+//       statusName: STATUS_SLOT[0],
+//     });
+//   }
+
+//   await bookingModel.findByIdAndUpdate(booking._id, {
+//     status: 0,
+//     statusName: STATUS_BOOKING[0],
+//     cancelReason: 'Người dùng tự hủy',
+//     cancelledAt: new Date(),
+//     slotId: null,
+//   });
+
+//   await notificationService.createNotification({
+//     userId: booking.userId,
+//     title: 'Đã hủy booking',
+//     message: `Bạn đã hủy booking ${booking.code}`,
+//     type: 'BOOKING_CANCEL',
+//     metadata: {
+//       bookingId: booking._id,
+//     },
+//   });
+
+//   return;
+// };

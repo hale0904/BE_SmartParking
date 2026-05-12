@@ -8,55 +8,40 @@ const paymentService = require('../payment/payment.service');
 const Transaction = require('../../../models/transaction.model');
 const QRPayment = require('../../../models/qrPayment');
 const slotModel = require('../../../models/slot.model');
+const { updateSlotStatus } = require('../../../service/slot-status.service');
 
 const STATUS_BOOKING = {
-  0: 'Đã hủy',
-  1: 'Đã gán vị trí',
-  2: 'Đặt trước',
-  3: 'Đã hoàn thành',
+  0: 'Da huy',
+  1: 'Da gan vi tri',
+  2: 'Dat truoc',
+  3: 'Da hoan thanh',
 };
 
-const STATUS_SLOT = {
-  0: 'Vị trí trống',
-  1: 'Vị trí có xe',
-  2: 'Vị trí đặt trước',
-  3: 'Vị trí lỗi/ Vị trí đang chỉnh sửa',
-};
-
-//#region Get Parking Session
+// #region Get Parking Session
 exports.getParkingSessions = async (payload) => {
   const { status, plateNumber, fromDate, toDate, userCode } = payload;
 
   const filter = {};
 
-  // =========================
-  // FILTER USER (THEO userCode)
-  // =========================
   if (userCode) {
     const user = await userModel.findOne({ code: userCode });
 
     if (!user) {
-      throw new Error('Không tìm thấy người dùng với mã đã cung cấp');
+      throw new Error('Khong tim thay nguoi dung voi ma da cung cap');
     }
 
     filter.userId = user._id;
   }
 
-  // =========================
-  // FILTER STATUS
-  // =========================
   if (status !== undefined && status !== null) {
     filter.status = Number(status);
   }
 
-  // =========================
-  // FILTER DATE
-  // =========================
   if (fromDate || toDate) {
     filter.checkInTime = {};
 
     if (fromDate && toDate && new Date(toDate) < new Date(fromDate)) {
-      throw new Error('Ngày kết thúc phải lớn hơn ngày bắt đầu');
+      throw new Error('Ngay ket thuc phai lon hon ngay bat dau');
     }
 
     if (fromDate) {
@@ -72,9 +57,6 @@ exports.getParkingSessions = async (payload) => {
     }
   }
 
-  // =========================
-  // FILTER BIỂN SỐ
-  // =========================
   if (plateNumber) {
     const plates = await licensePlateModel.find({
       plateNumber: { $regex: plateNumber, $options: 'i' },
@@ -83,15 +65,12 @@ exports.getParkingSessions = async (payload) => {
     const plateIds = plates.map((p) => p._id);
 
     if (plateIds.length === 0) {
-      throw new Error('Không tìm thấy biển số phù hợp');
+      throw new Error('Khong tim thay bien so phu hop');
     }
 
     filter.licensePlateId = { $in: plateIds };
   }
 
-  // =========================
-  // QUERY (KHÔNG PAGINATION)
-  // =========================
   const parkingSession = await parkingSessionModel
     .find(filter)
     .populate('vehicleId', 'code nameVehicles licensePlate')
@@ -115,7 +94,7 @@ const PAYMENT_STATUS_NAME = {
   1: 'PAID',
 };
 
-//#region HandleParkingSession
+// #region HandleParkingSession
 exports.handleParkingSession = async (licensePlate) => {
   const { plateNumber, capturedAt, _id } = licensePlate;
 
@@ -123,9 +102,6 @@ exports.handleParkingSession = async (licensePlate) => {
 
   const time = capturedAt || new Date();
 
-  // =========================
-  // TÌM VEHICLE + BOOKING
-  // =========================
   const vehicle = await vehicleModel.findOne({ licensePlate: plateNumber });
 
   const now = new Date();
@@ -134,7 +110,6 @@ exports.handleParkingSession = async (licensePlate) => {
     .findOne({
       licensePlate: plateNumber,
       status: { $in: [1, 2] },
-
       expectedArrivalTime: {
         $gte: now,
         $lte: next5Hours,
@@ -144,47 +119,22 @@ exports.handleParkingSession = async (licensePlate) => {
 
   const userId = vehicle?.userId;
 
-  // =========================
-  // LICENSE PLATE
-  // =========================
   const plates = await licensePlateModel.find({ plateNumber });
   const plateIds = plates.map((p) => p._id);
 
-  // =========================
-  // SESSION ĐANG MỞ
-  // =========================
   const existingSession = await parkingSessionModel.findOne({
     licensePlateId: { $in: plateIds },
     status: 0,
   });
 
-  // =========================
-  // CASE 1: XE RA
-  // =========================
   if (existingSession) {
-    // CẬP NHẬT BOOKING NẾU CÓ
-    // if (existingSession.bookingId) {
-    //   const booking = await bookingModel.findById(existingSession.bookingId);
-
-    //   if (booking && booking.status === 1) {
-    //     booking.status = 3;
-    //     booking.statusName = STATUS_BOOKING[3];
-
-    //     await booking.save();
-    //   }
-    // }
-
-    // nếu đã thanh toán rồi thì bỏ
     if (existingSession.statusPayment === 1) {
       return {
         type: 'ALREADY_PAID',
-        message: 'Phiên đã thanh toán',
+        message: 'Phien da thanh toan',
       };
     }
 
-    // =========================
-    // TÍNH TIỀN (chỉ tính 1 lần)
-    // =========================
     if (!existingSession.price || existingSession.price === 0) {
       const diffMs = time - existingSession.checkInTime;
       const minutes = diffMs / (1000 * 60);
@@ -196,20 +146,15 @@ exports.handleParkingSession = async (licensePlate) => {
 
     const amount = existingSession.price;
 
-    // =========================
-    // THỬ TRỪ VÍ
-    // =========================
     try {
       await walletService.payParkingSession({
         sessionId: existingSession._id,
         userId: existingSession.userId,
       });
 
-      // THANH TOÁN THÀNH CÔNG
       existingSession.checkOutTime = time;
       existingSession.status = 1;
       existingSession.statusName = 'COMPLETED';
-
       existingSession.statusPayment = PAYMENT_STATUS.PAID;
       existingSession.statusPaymentName =
         PAYMENT_STATUS_NAME[PAYMENT_STATUS.PAID];
@@ -218,13 +163,10 @@ exports.handleParkingSession = async (licensePlate) => {
 
       return {
         type: 'SUCCESS',
-        message: 'Thanh toán thành công',
+        message: 'Thanh toan thanh cong',
         data: existingSession,
       };
     } catch (err) {
-      // =========================
-      // CHECK ĐÃ CÓ QR CHƯA
-      // =========================
       const existingTransaction = await Transaction.findOne({
         parkingSessionId: existingSession._id,
         status: 'PENDING',
@@ -237,7 +179,7 @@ exports.handleParkingSession = async (licensePlate) => {
 
         return {
           type: 'QR_REQUIRED',
-          message: 'Đã có QR, vui lòng thanh toán',
+          message: 'Da co QR, vui long thanh toan',
           data: {
             session: existingSession,
             qr: qr?.qrUrl,
@@ -247,9 +189,6 @@ exports.handleParkingSession = async (licensePlate) => {
         };
       }
 
-      // =========================
-      // TẠO QR PARKING (ĐÚNG)
-      // =========================
       const { qrPayment } = await paymentService.createParkingQR({
         userId,
         amount,
@@ -258,7 +197,7 @@ exports.handleParkingSession = async (licensePlate) => {
 
       return {
         type: 'QR_REQUIRED',
-        message: 'Không đủ tiền, vui lòng thanh toán QR',
+        message: 'Khong du tien, vui long thanh toan QR',
         data: {
           session: existingSession,
           qr: qrPayment.qrUrl,
@@ -269,21 +208,11 @@ exports.handleParkingSession = async (licensePlate) => {
     }
   }
 
-  // =========================
-  // CASE 2: XE VÀO
-  // =========================
-
-  // =========================
-  // FULL BÃI
-  // =========================
   const slot = await slotModel.findOne({ status: { $in: [0, 2] } });
   if (!slot) {
-    throw new Error('Bãi đã đầy, không cho xe vào');
+    throw new Error('Bai da day, khong cho xe vao');
   }
 
-  // =========================
-  // CHECK SLOT VÀNG CỦA USER
-  // =========================
   const yellowSlot = await slotModel.findOne({
     status: 2,
   });
@@ -295,29 +224,20 @@ exports.handleParkingSession = async (licensePlate) => {
     });
 
     if (!hasBookingSlot) {
-      throw new Error('Bạn không có vị trí đặt trước');
+      throw new Error('Ban khong co vi tri dat truoc');
     }
   }
 
   if (booking) {
-    // =========================
-    // RELEASE SLOT HOLDING
-    // =========================
     if (booking.slotId) {
-      await slotModel.findByIdAndUpdate(booking.slotId, {
-        status: 0,
-        statusName: STATUS_SLOT[0],
+      await updateSlotStatus(booking.slotId, 0, {
+        source: 'booking-checkin-release',
       });
 
-      // bỏ slot khỏi booking
       booking.slotId = null;
     }
 
-    // =========================
-    // HOÀN THÀNH BOOKING
-    // =========================
     booking.expectedArrivalTime = time;
-
     booking.status = 3;
     booking.statusName = STATUS_BOOKING[3];
 
@@ -329,15 +249,9 @@ exports.handleParkingSession = async (licensePlate) => {
     checkInTime: time,
     status: 0,
     statusName: 'ONGOING',
-
     licensePlateId: _id,
-
     vehicleId: vehicle?._id || null,
-    // bookingId: booking?._id || null,
-    // slotId: booking?.slotId || null,
-
     userId,
-
     statusPayment: PAYMENT_STATUS.UNPAID,
     statusPaymentName: PAYMENT_STATUS_NAME[PAYMENT_STATUS.UNPAID],
   });
@@ -347,3 +261,353 @@ exports.handleParkingSession = async (licensePlate) => {
     data: newSession,
   };
 };
+
+// const parkingSessionModel = require('../../../models/parkingSession.model');
+// const licensePlateModel = require('../../../models/licensePlate.model');
+// const userModel = require('../../../models/user.model');
+// const bookingModel = require('../../../models/booking.model');
+// const vehicleModel = require('../../../models/vehicles.model');
+// const walletService = require('../wallet/wallet.service');
+// const paymentService = require('../payment/payment.service');
+// const Transaction = require('../../../models/transaction.model');
+// const QRPayment = require('../../../models/qrPayment');
+// const slotModel = require('../../../models/slot.model');
+
+// const STATUS_BOOKING = {
+//   0: 'Đã hủy',
+//   1: 'Đã gán vị trí',
+//   2: 'Đặt trước',
+//   3: 'Đã hoàn thành',
+// };
+
+// const STATUS_SLOT = {
+//   0: 'Vị trí trống',
+//   1: 'Vị trí có xe',
+//   2: 'Vị trí đặt trước',
+//   3: 'Vị trí lỗi/ Vị trí đang chỉnh sửa',
+// };
+
+// //#region Get Parking Session
+// exports.getParkingSessions = async (payload) => {
+//   const { status, plateNumber, fromDate, toDate, userCode } = payload;
+
+//   const filter = {};
+
+//   // =========================
+//   // FILTER USER (THEO userCode)
+//   // =========================
+//   if (userCode) {
+//     const user = await userModel.findOne({ code: userCode });
+
+//     if (!user) {
+//       throw new Error('Không tìm thấy người dùng với mã đã cung cấp');
+//     }
+
+//     filter.userId = user._id;
+//   }
+
+//   // =========================
+//   // FILTER STATUS
+//   // =========================
+//   if (status !== undefined && status !== null) {
+//     filter.status = Number(status);
+//   }
+
+//   // =========================
+//   // FILTER DATE
+//   // =========================
+//   if (fromDate || toDate) {
+//     filter.checkInTime = {};
+
+//     if (fromDate && toDate && new Date(toDate) < new Date(fromDate)) {
+//       throw new Error('Ngày kết thúc phải lớn hơn ngày bắt đầu');
+//     }
+
+//     if (fromDate) {
+//       const start = new Date(fromDate);
+//       start.setHours(0, 0, 0, 0);
+//       filter.checkInTime.$gte = start;
+//     }
+
+//     if (toDate) {
+//       const end = new Date(toDate);
+//       end.setHours(23, 59, 59, 999);
+//       filter.checkInTime.$lte = end;
+//     }
+//   }
+
+//   // =========================
+//   // FILTER BIỂN SỐ
+//   // =========================
+//   if (plateNumber) {
+//     const plates = await licensePlateModel.find({
+//       plateNumber: { $regex: plateNumber, $options: 'i' },
+//     });
+
+//     const plateIds = plates.map((p) => p._id);
+
+//     if (plateIds.length === 0) {
+//       throw new Error('Không tìm thấy biển số phù hợp');
+//     }
+
+//     filter.licensePlateId = { $in: plateIds };
+//   }
+
+//   // =========================
+//   // QUERY (KHÔNG PAGINATION)
+//   // =========================
+//   const parkingSession = await parkingSessionModel
+//     .find(filter)
+//     .populate('vehicleId', 'code nameVehicles licensePlate')
+//     .populate('bookingId', 'code licensePlate expectedArrivalTime')
+//     .populate('licensePlateId', 'plateNumber capturedAt')
+//     .populate('slotId', 'code nameSlot')
+//     .sort({ createdAt: -1 });
+
+//   return parkingSession;
+// };
+
+// const PRICE_PER_HOUR = 30000;
+
+// const PAYMENT_STATUS = {
+//   UNPAID: 0,
+//   PAID: 1,
+// };
+
+// const PAYMENT_STATUS_NAME = {
+//   0: 'UNPAID',
+//   1: 'PAID',
+// };
+
+// //#region HandleParkingSession
+// exports.handleParkingSession = async (licensePlate) => {
+//   const { plateNumber, capturedAt, _id } = licensePlate;
+
+//   if (!plateNumber) return;
+
+//   const time = capturedAt || new Date();
+
+//   // =========================
+//   // TÌM VEHICLE + BOOKING
+//   // =========================
+//   const vehicle = await vehicleModel.findOne({ licensePlate: plateNumber });
+
+//   const now = new Date();
+//   const next5Hours = new Date(now.getTime() + 5 * 60 * 60 * 1000);
+//   const booking = await bookingModel
+//     .findOne({
+//       licensePlate: plateNumber,
+//       status: { $in: [1, 2] },
+
+//       expectedArrivalTime: {
+//         $gte: now,
+//         $lte: next5Hours,
+//       },
+//     })
+//     .sort({ expectedArrivalTime: 1 });
+
+//   const userId = vehicle?.userId;
+
+//   // =========================
+//   // LICENSE PLATE
+//   // =========================
+//   const plates = await licensePlateModel.find({ plateNumber });
+//   const plateIds = plates.map((p) => p._id);
+
+//   // =========================
+//   // SESSION ĐANG MỞ
+//   // =========================
+//   const existingSession = await parkingSessionModel.findOne({
+//     licensePlateId: { $in: plateIds },
+//     status: 0,
+//   });
+
+//   // =========================
+//   // CASE 1: XE RA
+//   // =========================
+//   if (existingSession) {
+//     // CẬP NHẬT BOOKING NẾU CÓ
+//     // if (existingSession.bookingId) {
+//     //   const booking = await bookingModel.findById(existingSession.bookingId);
+
+//     //   if (booking && booking.status === 1) {
+//     //     booking.status = 3;
+//     //     booking.statusName = STATUS_BOOKING[3];
+
+//     //     await booking.save();
+//     //   }
+//     // }
+
+//     // nếu đã thanh toán rồi thì bỏ
+//     if (existingSession.statusPayment === 1) {
+//       return {
+//         type: 'ALREADY_PAID',
+//         message: 'Phiên đã thanh toán',
+//       };
+//     }
+
+//     // =========================
+//     // TÍNH TIỀN (chỉ tính 1 lần)
+//     // =========================
+//     if (!existingSession.price || existingSession.price === 0) {
+//       const diffMs = time - existingSession.checkInTime;
+//       const minutes = diffMs / (1000 * 60);
+//       const pricePerMinute = PRICE_PER_HOUR / 60;
+
+//       existingSession.price = Math.round(minutes * pricePerMinute);
+//       await existingSession.save();
+//     }
+
+//     const amount = existingSession.price;
+
+//     // =========================
+//     // THỬ TRỪ VÍ
+//     // =========================
+//     try {
+//       await walletService.payParkingSession({
+//         sessionId: existingSession._id,
+//         userId: existingSession.userId,
+//       });
+
+//       // THANH TOÁN THÀNH CÔNG
+//       existingSession.checkOutTime = time;
+//       existingSession.status = 1;
+//       existingSession.statusName = 'COMPLETED';
+
+//       existingSession.statusPayment = PAYMENT_STATUS.PAID;
+//       existingSession.statusPaymentName =
+//         PAYMENT_STATUS_NAME[PAYMENT_STATUS.PAID];
+
+//       await existingSession.save();
+
+//       return {
+//         type: 'SUCCESS',
+//         message: 'Thanh toán thành công',
+//         data: existingSession,
+//       };
+//     } catch (err) {
+//       // =========================
+//       // CHECK ĐÃ CÓ QR CHƯA
+//       // =========================
+//       const existingTransaction = await Transaction.findOne({
+//         parkingSessionId: existingSession._id,
+//         status: 'PENDING',
+//       });
+
+//       if (existingTransaction) {
+//         const qr = await QRPayment.findOne({
+//           transactionId: existingTransaction._id,
+//         });
+
+//         return {
+//           type: 'QR_REQUIRED',
+//           message: 'Đã có QR, vui lòng thanh toán',
+//           data: {
+//             session: existingSession,
+//             qr: qr?.qrUrl,
+//             content: qr?.content,
+//             amount,
+//           },
+//         };
+//       }
+
+//       // =========================
+//       // TẠO QR PARKING (ĐÚNG)
+//       // =========================
+//       const { qrPayment } = await paymentService.createParkingQR({
+//         userId,
+//         amount,
+//         sessionId: existingSession._id,
+//       });
+
+//       return {
+//         type: 'QR_REQUIRED',
+//         message: 'Không đủ tiền, vui lòng thanh toán QR',
+//         data: {
+//           session: existingSession,
+//           qr: qrPayment.qrUrl,
+//           content: qrPayment.content,
+//           amount,
+//         },
+//       };
+//     }
+//   }
+
+//   // =========================
+//   // CASE 2: XE VÀO
+//   // =========================
+
+//   // =========================
+//   // FULL BÃI
+//   // =========================
+//   const slot = await slotModel.findOne({ status: { $in: [0, 2] } });
+//   if (!slot) {
+//     throw new Error('Bãi đã đầy, không cho xe vào');
+//   }
+
+//   // =========================
+//   // CHECK SLOT VÀNG CỦA USER
+//   // =========================
+//   const yellowSlot = await slotModel.findOne({
+//     status: 2,
+//   });
+
+//   if (yellowSlot) {
+//     const hasBookingSlot = await bookingModel.exists({
+//       slotId: yellowSlot._id,
+//       userId,
+//     });
+
+//     if (!hasBookingSlot) {
+//       throw new Error('Bạn không có vị trí đặt trước');
+//     }
+//   }
+
+//   if (booking) {
+//     // =========================
+//     // RELEASE SLOT HOLDING
+//     // =========================
+//     if (booking.slotId) {
+//       await slotModel.findByIdAndUpdate(booking.slotId, {
+//         status: 0,
+//         statusName: STATUS_SLOT[0],
+//       });
+
+//       // bỏ slot khỏi booking
+//       booking.slotId = null;
+//     }
+
+//     // =========================
+//     // HOÀN THÀNH BOOKING
+//     // =========================
+//     booking.expectedArrivalTime = time;
+
+//     booking.status = 3;
+//     booking.statusName = STATUS_BOOKING[3];
+
+//     await booking.save();
+//   }
+
+//   const newSession = await parkingSessionModel.create({
+//     code: `PS_${Date.now()}`,
+//     checkInTime: time,
+//     status: 0,
+//     statusName: 'ONGOING',
+
+//     licensePlateId: _id,
+
+//     vehicleId: vehicle?._id || null,
+//     // bookingId: booking?._id || null,
+//     // slotId: booking?.slotId || null,
+
+//     userId,
+
+//     statusPayment: PAYMENT_STATUS.UNPAID,
+//     statusPaymentName: PAYMENT_STATUS_NAME[PAYMENT_STATUS.UNPAID],
+//   });
+
+//   return {
+//     type: 'CHECKIN',
+//     data: newSession,
+//   };
+// };
