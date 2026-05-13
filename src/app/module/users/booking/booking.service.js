@@ -251,7 +251,7 @@ exports.autoAssignSlotForUpcomingBookings = async () => {
 
       await notificationService.createNotification({
         userId: booking.userId._id,
-        title: 'Booking bị hủy',
+        title: 'Đặt chỗ bị hủy',
         message: 'Bãi xe đã hết chỗ',
         type: 'BOOKING_CANCEL',
         metadata: {
@@ -295,7 +295,7 @@ exports.releaseUncheckinBookings = async () => {
 
       await notificationService.createNotification({
         userId: booking.userId._id,
-        title: 'Booking bị hủy',
+        title: 'Đặt chỗ bị hủy',
         message: 'Bạn đã không check-in sau 15 phút',
         type: 'BOOKING_TIMEOUT',
       });
@@ -308,7 +308,7 @@ exports.releaseUncheckinBookings = async () => {
 //#region Cancel Booking
 exports.cancelBooking = async (bookingCode, userCode) => {
   if (!bookingCode || !userCode) {
-    throw new Error('Thiếu thông tin booking hoặc user');
+    throw new Error('Thiếu thông tin đặt chỗ hoặc người dùng');
   }
 
   const user = await userModel.findOne({ code: userCode });
@@ -323,12 +323,12 @@ exports.cancelBooking = async (bookingCode, userCode) => {
   });
 
   if (!booking) {
-    throw new Error('Không tìm thấy booking');
+    throw new Error('Không tìm thấy đặt chỗ');
   }
 
   // đã hủy hoặc đã hoàn thành thì không được hủy nữa
   if ([0, 3].includes(booking.status)) {
-    throw new Error('Booking này không thể hủy');
+    throw new Error('Đặt chỗ này không thể hủy');
   }
 
   // nếu đã được gán vị trí thì trả slot về trống
@@ -349,8 +349,8 @@ exports.cancelBooking = async (bookingCode, userCode) => {
 
   await notificationService.createNotification({
     userId: booking.userId,
-    title: 'Đã hủy booking',
-    message: `Bạn đã hủy booking ${booking.code}`,
+    title: 'Đã hủy đặt chỗ',
+    message: `Bạn đã hủy đặt chỗ ${booking.code}`,
     type: 'BOOKING_CANCEL',
     metadata: {
       bookingId: booking._id,

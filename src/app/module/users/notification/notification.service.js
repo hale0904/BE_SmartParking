@@ -34,7 +34,8 @@ exports.getNotification = async (userId) => {
 
   const notifications = await notificationModel
     .find(filter)
-    .select('userId title message type isRead metadata');
+    .select('userId title message type isRead metadata')
+    .sort({ createdAt: -1 });
 
   return notifications;
 };
