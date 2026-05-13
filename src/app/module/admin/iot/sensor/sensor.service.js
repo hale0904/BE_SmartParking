@@ -198,28 +198,45 @@ exports.handleSensorChange = async (sensor) => {
     sensorId: sensor._id,
     sensorCode: sensor.code,
   };
-  const now = new Date();
+
+  // =====================================================
+  // SENSOR ACTIVE -> CÓ XE
+  // =====================================================
   if (Number(sensor.isActive) === 1) {
-    // =========================
-    // SLOT -> OCCUPIED
-    // =========================
+    // cập nhật slot occupied
     if (slot.status !== 1) {
       slot.status = 1;
       slot.statusName = STATUS_SLOT[1];
+
       await slot.save();
     }
 
-    // =========================
+    // =====================================================
+    // KHÔNG CÓ BOOKING
+    // =====================================================
+    if (!booking) {
+      emitSlotUpdate({
+        slotId: slot._id,
+        slotCode: slot.code,
+        slotStatus: slot.status,
+        ...meta,
+        source: 'no-booking',
+      });
+
+      return;
+    }
+
+    // =====================================================
     // CHECK XE ĐÚNG BOOKING?
-    // =========================
+    // =====================================================
     const correctSession = await parkingSessionModel.findOne({
       bookingId: booking._id,
       status: 0,
     });
 
-    // =========================
+    // =====================================================
     // CASE 1: SLOT BỊ CHIẾM
-    // =========================
+    // =====================================================
     if (!correctSession) {
       // tìm slot xanh khác
       const newSlot = await slotModel.findOne({
@@ -234,7 +251,7 @@ exports.handleSensorChange = async (sensor) => {
 
         await newSlot.save();
 
-        // booking chuyển sang slot mới
+        // chuyển booking sang slot mới
         booking.slotId = newSlot._id;
 
         await booking.save();
@@ -247,8 +264,6 @@ exports.handleSensorChange = async (sensor) => {
         );
       }
 
-      await slot.save();
-
       emitSlotUpdate({
         slotId: slot._id,
         slotCode: slot.code,
@@ -260,17 +275,15 @@ exports.handleSensorChange = async (sensor) => {
       return;
     }
 
-    // =========================
+    // =====================================================
     // CASE 2: ĐÚNG XE BOOKING
-    // =========================
+    // =====================================================
     if (booking.status === 2) {
       booking.status = 1;
       booking.statusName = STATUS_BOOKING[1];
 
       await booking.save();
     }
-
-    await slot.save();
 
     emitSlotUpdate({
       slotId: slot._id,
@@ -283,16 +296,19 @@ exports.handleSensorChange = async (sensor) => {
     return;
   }
 
-  if (sensor.isActive === 1) {
-    await emitSlotStatusIfChanged(slot, 1, {
-      ...meta,
-      source: 'sensor-occupied',
-    });
-    return;
-  }
+  // =====================================================
+  // SENSOR INACTIVE -> SLOT AVAILABLE
+  // =====================================================
+  if (Number(sensor.isActive) === 0 && slot.status === 1) {
+    slot.status = 0;
+    slot.statusName = STATUS_SLOT[0];
 
-  if (sensor.isActive === 0 && slot.status === 1) {
-    await emitSlotStatusIfChanged(slot, 0, {
+    await slot.save();
+
+    emitSlotUpdate({
+      slotId: slot._id,
+      slotCode: slot.code,
+      slotStatus: slot.status,
       ...meta,
       source: 'sensor-available',
     });

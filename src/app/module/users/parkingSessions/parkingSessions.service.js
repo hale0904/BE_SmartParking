@@ -129,18 +129,19 @@ exports.handleParkingSession = async (licensePlate) => {
   const vehicle = await vehicleModel.findOne({ licensePlate: plateNumber });
 
   const now = new Date();
-  const next5Hours = new Date(now.getTime() + 5 * 60 * 60 * 1000);
-  const booking = await bookingModel
-    .findOne({
-      licensePlate: plateNumber,
-      status: { $in: [1, 2] },
+  const startOfDay = new Date(now);
+  startOfDay.setHours(0, 0, 0, 0);
 
-      expectedArrivalTime: {
-        $gte: now,
-        $lte: next5Hours,
-      },
-    })
-    .sort({ expectedArrivalTime: 1 });
+  const endOfDay = new Date(now);
+  endOfDay.setHours(23, 59, 59, 999);
+  const booking = await bookingModel.findOne({
+    licensePlate: plateNumber,
+    status: { $in: [1, 2] },
+    expectedArrivalTime: {
+      $gte: startOfDay,
+      $lte: endOfDay,
+    },
+  });
 
   const userId = vehicle?.userId;
 
