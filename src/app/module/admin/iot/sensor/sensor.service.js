@@ -297,13 +297,47 @@ exports.handleSensorChange = async (sensor) => {
   }
 
   // =====================================================
-  // SENSOR INACTIVE -> SLOT AVAILABLE
+  // SENSOR INACTIVE -> XE RỜI SLOT
   // =====================================================
-  if (Number(sensor.isActive) === 0 && slot.status === 1) {
-    slot.status = 0;
-    slot.statusName = STATUS_SLOT[0];
+  if (Number(sensor.isActive) === 0) {
+    // kiểm tra còn booking active không
+    const activeBooking = await bookingModel.findOne({
+      slotId: slot._id,
+      status: { $in: [1, 2] },
+    });
 
-    await slot.save();
+    // =========================================
+    // CÒN BOOKING -> GIỮ NGUYÊN SLOT
+    // =========================================
+    if (activeBooking) {
+      // quay lại slot reserved (vàng)
+      if (slot.status !== 2) {
+        slot.status = 2;
+        slot.statusName = STATUS_SLOT[2];
+
+        await slot.save();
+      }
+
+      emitSlotUpdate({
+        slotId: slot._id,
+        slotCode: slot.code,
+        slotStatus: slot.status,
+        ...meta,
+        source: 'booking-still-active',
+      });
+
+      return;
+    }
+
+    // =========================================
+    // KHÔNG CÓ BOOKING -> SLOT AVAILABLE
+    // =========================================
+    if (slot.status !== 0) {
+      slot.status = 0;
+      slot.statusName = STATUS_SLOT[0];
+
+      await slot.save();
+    }
 
     emitSlotUpdate({
       slotId: slot._id,
