@@ -239,30 +239,55 @@ exports.handleSensorChange = async (sensor) => {
     // =====================================================
     if (!correctSession) {
       // tìm slot xanh khác
-      const newSlot = await slotModel.findOne({
-        status: 0,
-        _id: { $ne: slot._id },
-      });
+      const newSlot = await slotModel.findOneAndUpdate(
+        {
+          status: 0,
+          _id: { $ne: slot._id },
+        },
+        {
+          $set: {
+            status: 2,
+            statusName: STATUS_SLOT[2],
+          },
+        },
+        { new: true }
+      );
 
-      if (newSlot) {
-        // slot mới -> vàng
-        newSlot.status = 2;
-        newSlot.statusName = STATUS_SLOT[2];
-
-        await newSlot.save();
-
-        // chuyển booking sang slot mới
-        booking.slotId = newSlot._id;
-
-        await booking.save();
-
-        console.log(
-          '[BOOKING] slot reassigned',
-          booking.code,
-          '=>',
-          newSlot.code
-        );
+      if (!newSlot) {
+        return;
       }
+
+      // atomic update booking
+      const updatedBooking = await bookingModel.findOneAndUpdate(
+        {
+          _id: booking._id,
+          slotId: slot._id, // CHỈ update nếu vẫn còn slot cũ
+        },
+        {
+          $set: {
+            slotId: newSlot._id,
+          },
+        },
+        { new: true }
+      );
+
+      // request khác đã xử lý rồi
+      if (!updatedBooking) {
+        // rollback slot mới
+        await slotModel.findByIdAndUpdate(newSlot._id, {
+          status: 0,
+          statusName: STATUS_SLOT[0],
+        });
+
+        return;
+      }
+
+      console.log(
+        '[BOOKING] slot reassigned',
+        updatedBooking.code,
+        '=>',
+        newSlot.code
+      );
 
       emitSlotUpdate({
         slotId: slot._id,
